@@ -5,6 +5,7 @@ mod app_shaders;
 mod core;
 mod generate_svg;
 mod graphics;
+mod hover_effect;
 mod rsutils;
 
 #[cfg(not(target_arch = "wasm32"))]

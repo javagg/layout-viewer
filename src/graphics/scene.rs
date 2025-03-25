@@ -66,6 +66,14 @@ impl Scene {
         }
     }
 
+    pub fn move_mesh_to_back(&mut self, id: MeshId) {
+        if self.meshes.get_index_of(id).is_some() {
+            self.meshes.move_to_back(id);
+        } else {
+            log::error!("Scene: move_mesh_to_back called with non-existent id");
+        }
+    }
+
     pub fn destroy(&mut self, gl: &glow::Context) {
         // Destroy all geometries
         for geometry in self.geometries.values_mut() {

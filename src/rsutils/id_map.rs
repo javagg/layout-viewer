@@ -5,6 +5,19 @@ pub trait IdMapKey {
     fn from_usize(id: usize) -> Self;
 }
 
+/// Ordered map of keys to values, where keys are constrained to be based on usize.
+///
+/// Keys are automatically generated in an ever-increasing sequence of positive
+/// integers.
+///
+/// Each item not only has an key, it also has an index! Unlike HashMap, the ordering
+/// is stable from run to run. It's also useful because meshes sometimes need to be
+/// ordered (e.g. for painter's algorithm or transparency).
+///
+/// TODO: Consider wrapping each tem in Option<> and hiding this from clients.
+/// Would require filtering (and probably a custom iterator) and unwrapping to
+/// expose the items. However This would allow [IdMap::move_to_back] and
+/// [IdMap::take] to be implemented efficiently.
 pub struct IdMap<K: IdMapKey + Copy + Hash + Eq, V> {
     items: IndexMap<K, V>,
     next_id: usize,
@@ -49,11 +62,25 @@ impl<K: IdMapKey + Copy + Hash + Eq, V> IdMap<K, V> {
         self.items.values_mut()
     }
 
-    pub fn replace(&mut self, id: K, value: V) {
-        if !self.items.contains_key(&id) {
-            log::error!("IdMap: replace called with non-existent id");
-        }
+    pub fn replace(&mut self, id: K, value: V) -> V {
+        self.items
+            .insert(id, value)
+            .expect("IdMap: replace called with non-existent id")
+    }
+
+    pub fn move_to_back(&mut self, id: K) {
+        let value = self.take(id);
         self.items.insert(id, value);
+    }
+
+    pub fn take(&mut self, id: K) -> V {
+        self.items
+            .shift_remove(&id)
+            .expect("IdMap: take called with non-existent id")
+    }
+
+    pub fn get_index_of(&self, id: K) -> Option<usize> {
+        self.items.get_index_of(&id)
     }
 
     pub fn clear(&mut self) {

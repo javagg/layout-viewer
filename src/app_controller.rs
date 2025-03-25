@@ -1,21 +1,20 @@
 use crate::app_shaders::FRAGMENT_SHADER;
 use crate::app_shaders::VERTEX_SHADER;
 use crate::core::Layer;
-use crate::core::PickResult;
 use crate::graphics::Camera;
 use crate::graphics::Geometry;
 use crate::graphics::Material;
 use crate::graphics::Mesh;
-use crate::graphics::MeshId;
 use crate::graphics::Renderer;
 use crate::graphics::Scene;
 use crate::graphics::Viewport;
+use crate::hover_effect::HoverEffect;
 use crate::Project;
 
 use geo::TriangulateEarcut;
-use nalgebra::Point3;
 
-type Point = nalgebra::Point3<f64>;
+type Point3 = nalgebra::Point3<f64>;
+type Point2 = nalgebra::Point2<f64>;
 
 /// Encapsulates high-level application logic common to all platforms.
 pub struct AppController {
@@ -28,18 +27,19 @@ pub struct AppController {
     zoom_speed: f64,
     needs_render: bool,
     project: Option<Project>,
-    hovered_cell: Option<PickResult>,
-    outline_mesh: MeshId,
+    hover_effect: HoverEffect,
 }
 
 impl AppController {
     pub fn new(
         renderer: Renderer,
-        scene: Scene,
+        mut scene: Scene,
         physical_width: u32,
         physical_height: u32,
     ) -> Self {
         let camera = Camera::new(Point3::new(0.0, 0.0, 0.0), 128.0, 128.0, -1.0, 1.0);
+
+        let hover_effect = HoverEffect::new(&mut scene);
 
         Self {
             window_size: (physical_width, physical_height),
@@ -51,8 +51,7 @@ impl AppController {
             zoom_speed: 0.05,
             needs_render: true,
             project: None,
-            hovered_cell: None,
-            outline_mesh: MeshId(0),
+            hover_effect,
         }
     }
 
@@ -73,7 +72,7 @@ impl AppController {
 
         populate_scene(project.layers(), &mut self.scene);
 
-        self.create_outline_mesh();
+        self.hover_effect.move_to_back(&mut self.scene);
 
         let bounds = project.bounds();
         self.camera.fit_to_bounds(self.window_size, bounds);
@@ -111,17 +110,23 @@ impl AppController {
 
         // Convert screen coordinates to world space
         let (world_x, world_y) = self.screen_to_world(x, y);
-        if let Some(project) = self.project() {
-            if let Some(result) = project.pick_cell(world_x, world_y) {
-                if self.hovered_cell != Some(result.clone()) {
-                    self.hovered_cell = Some(result.clone());
-                    self.update_outline_mesh(result);
-                }
-            } else if self.hovered_cell.is_some() {
-                self.hovered_cell = None;
-                self.get_outline_mesh().visible = false;
+
+        // Temporarily take the project to avoid borrowing issues
+        let Some(project) = self.project.take() else {
+            return;
+        };
+
+        if let Some(hit) = project.pick_cell(world_x, world_y) {
+            if !self.hover_effect.has_cell(&hit) {
+                self.hover_effect
+                    .update(hit, &project, &mut self.scene, self.renderer.gl());
             }
+        } else if self.hover_effect.is_active() {
+            self.hover_effect.hide(&mut self.scene);
+            self.render();
         }
+
+        self.project = Some(project);
     }
 
     pub fn handle_mouse_wheel(&mut self, x: u32, y: u32, delta: f64) {
@@ -156,9 +161,8 @@ impl AppController {
     }
 
     pub fn handle_mouse_leave(&mut self) {
-        if self.hovered_cell.is_some() {
-            self.hovered_cell = None;
-            self.get_outline_mesh().visible = false;
+        if self.hover_effect.is_active() {
+            self.hover_effect.hide(&mut self.scene);
             self.render();
         }
     }
@@ -218,65 +222,8 @@ impl AppController {
     fn screen_to_world(&self, screen_x: u32, screen_y: u32) -> (f64, f64) {
         let ndc_x = (screen_x as f64 / self.window_size.0 as f64) * 2.0 - 1.0;
         let ndc_y = -((screen_y as f64 / self.window_size.1 as f64) * 2.0 - 1.0);
-        let world = self.camera.unproject(Point::new(ndc_x, ndc_y, 0.0));
-        (world.x as f64, world.y as f64)
-    }
-
-    fn get_outline_mesh(&mut self) -> &mut Mesh {
-        self.scene.get_mesh_mut(&self.outline_mesh).unwrap()
-    }
-
-    fn create_outline_mesh(&mut self) {
-        if self.outline_mesh.0 != 0 {
-            log::error!("Outline mesh already exists");
-        }
-
-        let mut outline_material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
-        outline_material.set_blending(true);
-        let outline_material_id = self.scene.add_material(outline_material);
-
-        let outline_geometry = Geometry::new();
-        let outline_geometry_id = self.scene.add_geometry(outline_geometry);
-
-        let mut outline_mesh = Mesh::new(outline_geometry_id, outline_material_id);
-        outline_mesh.visible = false;
-        self.outline_mesh = self.scene.add_mesh(outline_mesh);
-    }
-
-    fn update_outline_mesh(&mut self, selection: PickResult) {
-        let Some(project) = self.project() else {
-            log::error!("No project");
-            return;
-        };
-        let layer = &project.layers()[selection.layer as usize];
-        let polygon = &layer.polygons[selection.polygon];
-
-        let triangles = polygon.earcut_triangles_raw();
-
-        let mut geometry = Geometry::new();
-
-        geometry.positions.reserve(3 * triangles.vertices.len() / 2);
-        geometry.indices.reserve(triangles.triangle_indices.len());
-
-        for coord in triangles.vertices.chunks(2) {
-            geometry.positions.push(coord[0] as f32);
-            geometry.positions.push(coord[1] as f32);
-            geometry.positions.push(0.0);
-        }
-
-        for index in triangles.triangle_indices {
-            geometry.indices.push(index as u32);
-        }
-
-        let mut color = layer.color;
-        color.w = 1.0;
-
-        let mesh = self.get_outline_mesh();
-        mesh.visible = true;
-        mesh.set_vec4("color", color);
-        let geometry_id = mesh.geometry_id;
-        let gl = self.renderer.gl();
-        self.scene.replace_geometry(gl, geometry_id, geometry);
+        let world = self.camera.unproject(Point3::new(ndc_x, ndc_y, 0.0));
+        (world.x, world.y)
     }
 }
 

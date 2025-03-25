@@ -3,7 +3,10 @@
 Rust library and CLI tool for rendering GDSII layouts with OpenGL / WebGL or
 converting them to SVG format.
 
-The library can be used both natively and as a WebAssembly module.
+Includes a [web app](https://prideout.net/layout-viewer/) that allows users
+to drop a GDSII file for local viewing. All work is performed in the browser
+and no data is sent to the server. In fact there is no server, it's just
+a static site hosted with GitHub Pages.
 
 ## Modules
 
@@ -52,6 +55,17 @@ trunk serve
 - anyhow: Error handling
 
 ## Next tasks
+
+"Hide all" does not actually hide everything
+  ... and colors get mismatched
+
+Outline
+
+- TODO in `hover_effect`
+- Fix mitering in Ribbon
+- Add SS width to Ribbon
+- Consider replacing Ribbon with inflated polygon
+- - https://github.com/iShape-Rust/iOverlay?tab=readme-ov-file#offseting-a-polygon
 
 Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
 
