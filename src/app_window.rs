@@ -158,8 +158,8 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
                 WindowEvent::MouseWheel { delta, .. } => {
                     if let Some(pos) = current_cursor_pos {
                         let delta_y = match delta {
-                            winit::event::MouseScrollDelta::LineDelta(_, y) => y,
-                            winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+                            winit::event::MouseScrollDelta::LineDelta(_, y) => y as f64,
+                            winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y,
                         };
                         controller.handle_mouse_wheel(pos.x as u32, pos.y as u32, delta_y);
                         controller.render();

@@ -15,7 +15,7 @@ use crate::Project;
 use geo::TriangulateEarcut;
 use nalgebra::Point3;
 
-type Point = nalgebra::Point3<f32>;
+type Point = nalgebra::Point3<f64>;
 
 /// Encapsulates high-level application logic common to all platforms.
 pub struct AppController {
@@ -25,7 +25,7 @@ pub struct AppController {
     scene: Scene,
     is_dragging: bool,
     last_mouse_pos: Option<(u32, u32)>,
-    zoom_speed: f32,
+    zoom_speed: f64,
     needs_render: bool,
     project: Option<Project>,
     hovered_cell: Option<PickResult>,
@@ -102,8 +102,8 @@ impl AppController {
                 let dy = p1.1 - p0.1;
 
                 let mut pos = self.camera.position;
-                pos.x -= dx as f32;
-                pos.y -= dy as f32;
+                pos.x -= dx;
+                pos.y -= dy;
                 self.camera.position = pos;
             }
             self.last_mouse_pos = Some((x, y));
@@ -124,9 +124,9 @@ impl AppController {
         }
     }
 
-    pub fn handle_mouse_wheel(&mut self, x: u32, y: u32, delta: f32) {
+    pub fn handle_mouse_wheel(&mut self, x: u32, y: u32, delta: f64) {
         // Ignore very small deltas that might be touchpad bounce
-        const MIN_DELTA: f32 = 0.01;
+        const MIN_DELTA: f64 = 0.01;
         if delta.abs() < MIN_DELTA {
             return;
         }
@@ -151,8 +151,8 @@ impl AppController {
         let (new_world_x, new_world_y) = self.screen_to_world(x, y);
 
         // Adjust camera position to keep cursor point stable
-        self.camera.position.x += (world_x - new_world_x) as f32;
-        self.camera.position.y += (world_y - new_world_y) as f32;
+        self.camera.position.x += world_x - new_world_x;
+        self.camera.position.y += world_y - new_world_y;
     }
 
     pub fn handle_mouse_leave(&mut self) {
@@ -185,10 +185,10 @@ impl AppController {
         self.renderer.set_viewport(Viewport {
             left: 0.0,
             top: 0.0,
-            width: physical_width as f32,
-            height: physical_height as f32,
+            width: physical_width as f64,
+            height: physical_height as f64,
         });
-        let window_aspect = physical_width as f32 / physical_height as f32;
+        let window_aspect = physical_width as f64 / physical_height as f64;
         self.camera.height = self.camera.width / window_aspect;
 
         self.renderer.render(&mut self.scene, &self.camera);
@@ -216,8 +216,8 @@ impl AppController {
     }
 
     fn screen_to_world(&self, screen_x: u32, screen_y: u32) -> (f64, f64) {
-        let ndc_x = (screen_x as f32 / self.window_size.0 as f32) * 2.0 - 1.0;
-        let ndc_y = -((screen_y as f32 / self.window_size.1 as f32) * 2.0 - 1.0);
+        let ndc_x = (screen_x as f64 / self.window_size.0 as f64) * 2.0 - 1.0;
+        let ndc_y = -((screen_y as f64 / self.window_size.1 as f64) * 2.0 - 1.0);
         let world = self.camera.unproject(Point::new(ndc_x, ndc_y, 0.0));
         (world.x as f64, world.y as f64)
     }

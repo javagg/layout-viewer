@@ -93,8 +93,8 @@ impl Renderer {
             gl.clear_color(r, g, b, a);
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            let projection = camera.get_projection_matrix();
-            let view_matrix = camera.get_view_matrix();
+            let projection = camera.get_projection_matrix().cast::<f32>();
+            let view_matrix = camera.get_view_matrix().cast::<f32>();
 
             for mesh in scene.meshes.values() {
                 let material = scene.materials.get_mut(&mesh.material_id).unwrap();

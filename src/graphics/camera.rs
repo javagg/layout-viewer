@@ -1,6 +1,6 @@
-type Mat4 = nalgebra::Matrix4<f32>;
-type Point = nalgebra::Point3<f32>;
-type Vec3 = nalgebra::Vector3<f32>;
+type Mat4 = nalgebra::Matrix4<f64>;
+type Point = nalgebra::Point3<f64>;
+type Vec3 = nalgebra::Vector3<f64>;
 
 use std::fmt;
 
@@ -24,14 +24,14 @@ pub struct Camera {
     pub position: Point,
     pub up: Vec3,
     pub gaze: Vec3,
-    pub width: f32,
-    pub height: f32,
-    pub near: f32,
-    pub far: f32,
+    pub width: f64,
+    pub height: f64,
+    pub near: f64,
+    pub far: f64,
 }
 
 impl Camera {
-    pub fn new(position: Point, width: f32, height: f32, near: f32, far: f32) -> Self {
+    pub fn new(position: Point, width: f64, height: f64, near: f64, far: f64) -> Self {
         Self {
             position,
             up: Vec3::new(-1.0, 0.0, 0.0),
@@ -83,7 +83,7 @@ impl Camera {
     }
 
     /// Sets the world space width and height of the near projection quad.
-    pub fn set_size(&mut self, width: f32, height: f32) {
+    pub fn set_size(&mut self, width: f64, height: f64) {
         self.width = width;
         self.height = height;
     }
@@ -91,10 +91,10 @@ impl Camera {
     /// Fits the camera so that it frames the given world-space rectangle.
     pub fn fit_to_bounds(&mut self, window_size: (u32, u32), world_bounds: BoundingBox) {
         let (window_width, window_height) = window_size;
-        let window_aspect = window_width as f32 / window_height as f32;
+        let window_aspect = window_width as f64 / window_height as f64;
 
-        let world_width = world_bounds.width() as f32;
-        let world_height = world_bounds.height() as f32;
+        let world_width = world_bounds.width() as f64;
+        let world_height = world_bounds.height() as f64;
         let world_aspect = world_width / world_height;
 
         if window_aspect > world_aspect {
@@ -108,7 +108,7 @@ impl Camera {
         }
 
         // Center the camera on the world bounds
-        self.position.x = world_bounds.min_x as f32 + world_width / 2.0;
-        self.position.y = world_bounds.min_y as f32 + world_height / 2.0;
+        self.position.x = world_bounds.min_x as f64 + world_width / 2.0;
+        self.position.y = world_bounds.min_y as f64 + world_height / 2.0;
     }
 }

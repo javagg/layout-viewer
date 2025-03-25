@@ -1,13 +1,13 @@
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
-    pub left: f32,
-    pub top: f32,
-    pub width: f32,
-    pub height: f32,
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 impl Viewport {
-    pub fn new(left: f32, top: f32, width: f32, height: f32) -> Self {
+    pub fn new(left: f64, top: f64, width: f64, height: f64) -> Self {
         Self {
             left,
             top,
@@ -16,7 +16,7 @@ impl Viewport {
         }
     }
 
-    pub fn aspect_ratio(&self) -> f32 {
+    pub fn aspect_ratio(&self) -> f64 {
         self.width / self.height
     }
 }

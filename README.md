@@ -53,8 +53,6 @@ trunk serve
 
 ## Next tasks
 
-Use fp64 in the graphics layer.
-
 Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
 
 Implement array refs.

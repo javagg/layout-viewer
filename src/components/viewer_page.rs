@@ -36,7 +36,7 @@ pub enum ViewerMsg {
     MousePress(u32, u32),
     MouseRelease,
     MouseMove(u32, u32),
-    MouseWheel(u32, u32, f32),
+    MouseWheel(u32, u32, f64),
     MouseLeave,
     GdsLoaded(Box<Project>),
     ParsingGds,
@@ -133,8 +133,7 @@ impl Component for ViewerPage {
             let scale = window().unwrap().device_pixel_ratio();
             let x = (x as f64) * scale;
             let y = (y as f64) * scale;
-            let delta = e.delta_y() as f32;
-            ViewerMsg::MouseWheel(x as u32, y as u32, delta)
+            ViewerMsg::MouseWheel(x as u32, y as u32, e.delta_y())
         });
 
         let on_remove_toast = ctx.link().callback(ViewerMsg::RemoveToast);
