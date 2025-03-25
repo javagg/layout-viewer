@@ -155,6 +155,14 @@ impl AppController {
         self.camera.position.y += (world_y - new_world_y) as f32;
     }
 
+    pub fn handle_mouse_leave(&mut self) {
+        if self.hovered_cell.is_some() {
+            self.hovered_cell = None;
+            self.get_outline_mesh().visible = false;
+            self.render();
+        }
+    }
+
     /// Requests a render to occur during the next tick.
     pub fn render(&mut self) {
         self.needs_render = true;
@@ -180,10 +188,11 @@ impl AppController {
             width: physical_width as f32,
             height: physical_height as f32,
         });
-        if let Some(project) = self.project() {
-            let bounds = project.bounds();
-            self.camera.fit_to_bounds(self.window_size, bounds);
-        }
+        let window_aspect = physical_width as f32 / physical_height as f32;
+        self.camera.height = self.camera.width / window_aspect;
+
+        self.renderer.render(&mut self.scene, &self.camera);
+        self.renderer.check_gl_error("Scene render");
     }
 
     pub fn destroy(&mut self) {

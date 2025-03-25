@@ -181,7 +181,6 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
                     );
 
                     controller.resize(size.width, size.height);
-                    controller.render();
                 }
                 WindowEvent::RedrawRequested => {
                     controller.render();

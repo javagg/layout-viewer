@@ -37,6 +37,7 @@ pub enum ViewerMsg {
     MouseRelease,
     MouseMove(u32, u32),
     MouseWheel(u32, u32, f32),
+    MouseLeave,
     GdsLoaded(Box<Project>),
     ParsingGds,
     Render,
@@ -123,6 +124,8 @@ impl Component for ViewerPage {
             ViewerMsg::MouseMove(x as u32, y as u32)
         });
 
+        let onmouseleave = ctx.link().callback(|_| ViewerMsg::MouseLeave);
+
         let onwheel = ctx.link().callback(|e: WheelEvent| {
             e.prevent_default();
             let x = e.offset_x() as u32;
@@ -146,6 +149,7 @@ impl Component for ViewerPage {
                         onmousedown={onmousedown}
                         onmouseup={onmouseup}
                         onmousemove={onmousemove}
+                        onmouseleave={onmouseleave}
                         onwheel={onwheel}
                     />
                     <div class="floating-buttons">
@@ -247,7 +251,6 @@ impl Component for ViewerPage {
                     canvas.set_width(width);
                     canvas.set_height(height);
                     controller.resize(width, height);
-                    controller.render();
                 }
                 false
             }
@@ -284,6 +287,10 @@ impl Component for ViewerPage {
             ViewerMsg::MouseWheel(x, y, delta) => {
                 controller.handle_mouse_wheel(x, y, -delta);
                 controller.render();
+                false
+            }
+            ViewerMsg::MouseLeave => {
+                controller.handle_mouse_leave();
                 false
             }
             ViewerMsg::GdsLoaded(project) => {
