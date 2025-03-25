@@ -174,6 +174,7 @@ impl Component for HomePage {
 static mut DROPPED_FILE: Option<(String, Vec<u8>)> = None;
 
 // Function to get and clear the dropped file
+#[allow(static_mut_refs)]
 pub fn take_dropped_file() -> Option<(String, Vec<u8>)> {
     unsafe { DROPPED_FILE.take() }
 }

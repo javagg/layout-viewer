@@ -14,7 +14,6 @@ use crate::Project;
 
 use geo::TriangulateEarcut;
 use nalgebra::Point3;
-use nalgebra::Vector4;
 
 type Point = nalgebra::Point3<f32>;
 
@@ -260,9 +259,12 @@ impl AppController {
             geometry.indices.push(index as u32);
         }
 
+        let mut color = layer.color;
+        color.w = 1.0;
+
         let mesh = self.get_outline_mesh();
         mesh.visible = true;
-        mesh.set_vec4("color", Vector4::new(0.0, 1.0, 1.0, 0.5));
+        mesh.set_vec4("color", color);
         let geometry_id = mesh.geometry_id;
         let gl = self.renderer.gl();
         self.scene.replace_geometry(gl, geometry_id, geometry);
