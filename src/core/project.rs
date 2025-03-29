@@ -271,6 +271,21 @@ impl Project {
             }
         }
 
+        self.apply_light_scheme();
+
+        // Update bounds for each layer and the overall project
+        self.bounds = BoundingBox::new();
+        for layer in &mut self.layers {
+            layer.update_bounds();
+            if !layer.bounds.is_empty() {
+                self.bounds.encompass(&layer.bounds);
+            }
+        }
+
+        self.rtree = RTree::bulk_load(rtree_items);
+    }
+
+    pub fn apply_rainbow_scheme(&mut self) {
         let mut count = 0;
         for layer in &self.layers {
             if !layer.polygons.is_empty() {
@@ -293,17 +308,24 @@ impl Project {
             layer.color = Vector4::new(r, g, b, 0.5);
             i += 1;
         }
+    }
 
-        // Update bounds for each layer and the overall project
-        self.bounds = BoundingBox::new();
-        for layer in &mut self.layers {
-            layer.update_bounds();
-            if !layer.bounds.is_empty() {
-                self.bounds.encompass(&layer.bounds);
+    pub fn apply_light_scheme(&mut self) {
+        let mut count = 0;
+        for layer in &self.layers {
+            if !layer.polygons.is_empty() {
+                count += 1;
             }
         }
 
-        self.rtree = RTree::bulk_load(rtree_items);
+        let alpha = 1.0 / (count as f32);
+
+        for layer in &mut self.layers {
+            if layer.polygons.is_empty() {
+                continue;
+            }
+            layer.color = Vector4::new(0.0, 0.0, 0.0, alpha);
+        }
     }
 
     fn update_layers_recurse(&mut self, cell_id: CellId, rtree_items: &mut Vec<PolygonRef>) {

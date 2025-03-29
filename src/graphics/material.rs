@@ -16,12 +16,19 @@ impl IdMapKey for MaterialId {
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum BlendMode {
+    Disabled,
+    SourceOver,
+    Additive,
+}
+
 pub struct Material {
     program: Option<glow::Program>,
     uniform_locations: IndexMap<String, glow::UniformLocation>,
     vertex_shader: String,
     fragment_shader: String,
-    blending_enabled: bool,
+    blend_mode: BlendMode,
 }
 
 impl Material {
@@ -31,16 +38,16 @@ impl Material {
             uniform_locations: IndexMap::new(),
             vertex_shader: vertex_shader.to_string(),
             fragment_shader: fragment_shader.to_string(),
-            blending_enabled: false,
+            blend_mode: BlendMode::Disabled,
         }
     }
 
-    pub fn set_blending(&mut self, enabled: bool) {
-        self.blending_enabled = enabled;
+    pub fn set_blending(&mut self, mode: BlendMode) {
+        self.blend_mode = mode;
     }
 
-    pub fn is_blending_enabled(&self) -> bool {
-        self.blending_enabled
+    pub fn blend_mode(&self) -> BlendMode {
+        self.blend_mode
     }
 
     pub(crate) fn create_program(&mut self, gl: &glow::Context) {
@@ -129,11 +136,18 @@ impl Material {
         unsafe {
             gl.use_program(self.program);
 
-            if self.blending_enabled {
-                gl.enable(glow::BLEND);
-                gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            } else {
-                gl.disable(glow::BLEND);
+            match self.blend_mode {
+                BlendMode::Disabled => {
+                    gl.disable(glow::BLEND);
+                }
+                BlendMode::SourceOver => {
+                    gl.enable(glow::BLEND);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+                }
+                BlendMode::Additive => {
+                    gl.enable(glow::BLEND);
+                    gl.blend_func(glow::ONE, glow::ONE);
+                }
             }
         }
     }

@@ -1,3 +1,5 @@
+use gloo::timers::callback::Timeout;
+use serde::Serialize;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -13,6 +15,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::app_controller::AppController;
+use crate::app_controller::Theme;
 use crate::components::take_dropped_file;
 use crate::components::LayerProxy;
 use crate::components::Route;
@@ -38,12 +41,13 @@ pub enum ViewerMsg {
     MouseWheel(u32, u32, f64),
     MouseLeave,
     GdsLoaded(Box<Project>),
-    ParsingGds,
+    SetProject(Box<Project>),
     Render,
     Resize,
     Tick,
     RemoveToast(usize),
     UpdateLayer(LayerProxy),
+    ToggleTheme,
 }
 
 pub struct ViewerPage {
@@ -52,6 +56,7 @@ pub struct ViewerPage {
     status: String,
     toast_manager: ToastManager,
     layer_proxies: Vec<LayerProxy>,
+    is_dark_theme: bool,
 }
 
 impl Component for ViewerPage {
@@ -64,15 +69,26 @@ impl Component for ViewerPage {
         let status = "Downloading GDS...".to_string();
         let toast_manager = ToastManager::new();
         let layer_proxies = Vec::new();
+        
+        // Read theme from local storage
+        let is_dark_theme = if let Some(window) = window() {
+            if let Some(storage) = window.local_storage().unwrap() {
+                storage.get_item("dark_theme").unwrap_or(None)
+                    .map(|s| s == "true")
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
         // Check for dropped file
         if let Some((_name, content)) = take_dropped_file() {
             let link = ctx.link().clone();
             wasm_bindgen_futures::spawn_local(async move {
-                link.send_message(ViewerMsg::ParsingGds);
                 match Project::from_bytes(&content) {
-                    Ok(mut project) => {
-                        project.update_layers();
+                    Ok(project) => {
                         link.send_message(ViewerMsg::GdsLoaded(Box::new(project)));
                     }
                     Err(_) => {
@@ -93,6 +109,7 @@ impl Component for ViewerPage {
             status,
             toast_manager,
             layer_proxies,
+            is_dark_theme,
         }
     }
 
@@ -137,10 +154,11 @@ impl Component for ViewerPage {
 
         let on_remove_toast = ctx.link().callback(ViewerMsg::RemoveToast);
         let update_layer = ctx.link().callback(ViewerMsg::UpdateLayer);
+        let toggle_theme = ctx.link().callback(|_| ViewerMsg::ToggleTheme);
 
         html! {
             <>
-                <div class="viewer-container">
+                <div class={classes!("viewer-container", if self.is_dark_theme { "dark-theme" } else { "light-theme" })}>
                     <canvas
                         class="viewer-canvas"
                         ref={self.canvas_ref.clone()}
@@ -149,15 +167,21 @@ impl Component for ViewerPage {
                         onmousemove={onmousemove}
                         onmouseleave={onmouseleave}
                         onwheel={onwheel}
+                        style={"background-color: none;"}
                     />
                     <div class="floating-buttons">
                         <Link<Route> to={Route::Home} classes="floating-button">
                             <i class="fas fa-arrow-left fa-lg"></i>
                         </Link<Route>>
+                        <button class="floating-button" onclick={toggle_theme}>
+                            <i class={format!("fas fa-{} fa-lg", if self.is_dark_theme { "sun" } else { "moon" })}></i>
+                        </button>
                         <span class="status-text">{self.status.clone()}</span>
                     </div>
                 </div>
-                <Sidebar layers={self.layer_proxies.clone()} update_layer={update_layer} />
+                <div class={classes!(if self.is_dark_theme { "dark-theme" } else { "light-theme" })}>
+                    <Sidebar layers={self.layer_proxies.clone()} update_layer={update_layer} />
+                </div>
                 <ToastContainer toasts={self.toast_manager.toasts().to_vec()} on_remove={on_remove_toast} />
             </>
         }
@@ -175,19 +199,10 @@ impl Component for ViewerPage {
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_gds_file(&id).await {
                     Ok(bytes) => {
-                        link.send_message(ViewerMsg::ParsingGds);
                         let Ok(project) = Project::from_bytes(&bytes) else {
                             log::error!("Failed to parse fetched GDS.");
                             return;
                         };
-                        let stats = project.stats();
-                        log::info!("Number of structs: {}", stats.struct_count);
-                        log::info!("Number of polygons: {}", stats.polygon_count);
-                        log::info!("Number of paths: {}", stats.path_count);
-                        log::info!(
-                            "Number of layers: {}",
-                            (project.highest_layer() + 1) as usize
-                        );
                         link.send_message(ViewerMsg::GdsLoaded(Box::new(project)));
                     }
                     Err(e) => {
@@ -203,8 +218,19 @@ impl Component for ViewerPage {
             return;
         };
 
+        #[derive(Serialize)]
+        struct Options {
+            alpha: bool,
+            antialias: bool,
+        }
+
+        let options = serde_wasm_bindgen::to_value(&Options {
+            alpha: true,
+            antialias: true,
+        }).unwrap();
+
         let gl: WebGl2RenderingContext = canvas
-            .get_context("webgl2")
+            .get_context_with_context_options("webgl2", &options)
             .unwrap()
             .unwrap()
             .dyn_into()
@@ -287,12 +313,22 @@ impl Component for ViewerPage {
                 controller.handle_mouse_leave();
                 false
             }
-            ViewerMsg::GdsLoaded(project) => {
+            ViewerMsg::GdsLoaded(mut project) => {
+                if self.is_dark_theme {
+                    project.apply_rainbow_scheme();
+                }
+                self.status = "Triangulating polygons...".to_string();
+                let timeout = Timeout::new(1, move || link.send_message(ViewerMsg::SetProject(project)));
+                timeout.forget();
+                true
+            }
+            ViewerMsg::SetProject(project) => {
                 let Some(controller) = &mut self.controller else {
                     log::error!("Controller not ready");
                     return false;
                 };
                 controller.set_project(*project);
+                controller.apply_theme(if self.is_dark_theme { Theme::Dark } else { Theme::Light });
                 self.status.clear();
                 self.toast_manager
                     .show("Zoom and pan like a map".to_string());
@@ -316,10 +352,6 @@ impl Component for ViewerPage {
                 }
 
                 controller.render();
-                true
-            }
-            ViewerMsg::ParsingGds => {
-                self.status = "Parsing GDS...".to_string();
                 true
             }
             ViewerMsg::RemoveToast(id) => {
@@ -351,6 +383,21 @@ impl Component for ViewerPage {
                 mesh.visible = layer_proxy.visible;
                 self.layer_proxies[layer_proxy.index] = layer_proxy.clone();
                 controller.render();
+                true
+            }
+            ViewerMsg::ToggleTheme => {
+                self.is_dark_theme = !self.is_dark_theme;
+                controller.apply_theme(if self.is_dark_theme { Theme::Dark } else { Theme::Light });
+                for layer in controller.project().unwrap().layers() {
+                    let proxy = &mut self.layer_proxies[layer.index() as usize];
+                    proxy.color = rgb_to_hex(layer.color.x, layer.color.y, layer.color.z);
+                    proxy.opacity = layer.color.w;
+                }
+                if let Some(window) = window() {
+                    if let Some(storage) = window.local_storage().unwrap() {
+                        let _ = storage.set_item("dark_theme", if self.is_dark_theme { "true" } else { "false" });
+                    }
+                }
                 true
             }
         }

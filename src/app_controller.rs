@@ -1,9 +1,11 @@
 use crate::app_shaders::FRAGMENT_SHADER;
 use crate::app_shaders::VERTEX_SHADER;
 use crate::core::Layer;
+use crate::graphics::BlendMode;
 use crate::graphics::Camera;
 use crate::graphics::Geometry;
 use crate::graphics::Material;
+use crate::graphics::MaterialId;
 use crate::graphics::Mesh;
 use crate::graphics::Renderer;
 use crate::graphics::Scene;
@@ -29,6 +31,12 @@ pub struct AppController {
     needs_render: bool,
     project: Option<Project>,
     hover_effect: HoverEffect,
+    layer_material: MaterialId,
+}
+
+pub enum Theme {
+    Light,
+    Dark,
 }
 
 impl AppController {
@@ -42,6 +50,9 @@ impl AppController {
 
         let hover_effect = HoverEffect::new(&mut scene);
 
+        let layer_material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
+        let layer_material_id = scene.add_material(layer_material);
+
         Self {
             window_size: (physical_width, physical_height),
             renderer,
@@ -53,6 +64,7 @@ impl AppController {
             needs_render: true,
             project: None,
             hover_effect,
+            layer_material: layer_material_id,
         }
     }
 
@@ -83,7 +95,7 @@ impl AppController {
             layer.color.w = alpha;
         }
 
-        populate_scene(project.layers_mut(), &mut self.scene);
+        self.create_meshes(project.layers_mut());
 
         self.hover_effect.move_to_back(&mut self.scene);
 
@@ -91,8 +103,6 @@ impl AppController {
         self.camera.fit_to_bounds(self.window_size, bounds);
 
         self.project = Some(project);
-
-        self.render();
     }
 
     pub fn handle_mouse_press(&mut self, x: u32, y: u32) {
@@ -240,11 +250,44 @@ impl AppController {
         &self.camera
     }
 
+    pub fn apply_theme(&mut self, theme: Theme) {
+        let mut project = self.project.take().unwrap();
+        let material = self.scene.get_material_mut(&self.layer_material).unwrap();
+        match theme {
+            Theme::Light => {
+                material.set_blending(BlendMode::Additive);
+                project.apply_light_scheme();
+            }
+            Theme::Dark => {
+                material.set_blending(BlendMode::SourceOver);
+                project.apply_rainbow_scheme();
+            }
+        }
+        for layer in project.layers() {
+            if let Some(mesh) = layer.mesh {
+                let mesh = self.scene.get_mesh_mut(&mesh).unwrap();
+                mesh.set_vec4("color", layer.color);
+            }
+        }
+        self.project = Some(project);
+        self.render();
+    }
+
     fn screen_to_world(&self, screen_x: u32, screen_y: u32) -> (f64, f64) {
         let ndc_x = (screen_x as f64 / self.window_size.0 as f64) * 2.0 - 1.0;
         let ndc_y = -((screen_y as f64 / self.window_size.1 as f64) * 2.0 - 1.0);
         let world = self.camera.unproject(Point3::new(ndc_x, ndc_y, 0.0));
         (world.x, world.y)
+    }
+
+    fn create_meshes(&mut self, layers: &mut [Layer]) {
+        for layer in layers {
+            let geometry = create_layer_geometry(layer);
+            let geometry_id = self.scene.add_geometry(geometry);
+            let mesh = Mesh::new(geometry_id, self.layer_material);
+            let id = self.scene.add_mesh(mesh);
+            layer.mesh = Some(id);
+        }
     }
 }
 
@@ -254,31 +297,12 @@ impl Drop for AppController {
     }
 }
 
-pub fn populate_scene(layers: &mut [Layer], scene: &mut Scene) {
-    let mut material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
-
-    material.set_blending(true);
-
-    let material_id = scene.add_material(material);
-
-    for layer in layers {
-        let geometry = create_layer_geometry(layer);
-        let geometry_id = scene.add_geometry(geometry);
-        let mut mesh = Mesh::new(geometry_id, material_id);
-
-        // Set the color uniform using the layer's color
-        mesh.set_vec4("color", layer.color);
-
-        let id = scene.add_mesh(mesh);
-        layer.mesh = Some(id);
-    }
-}
-
 /// Triangulates polygons and appends them to a vertex buffer.
 fn create_layer_geometry(layer: &Layer) -> Geometry {
     let mut geometry = Geometry::new();
 
     // Process each polygon in the layer
+    // This is the slowest part of the load process (at the time of this writing)
     for polygon in &layer.polygons {
         let triangles = polygon.earcut_triangles_raw();
 

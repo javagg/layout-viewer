@@ -69,10 +69,6 @@ impl Component for Sidebar {
                                 class="layer-item"
                                 key={layer.index}
                                 onclick={toggle_layer}
-                                style={format!(
-                                    "background-color: {}",
-                                    if layer.visible { "#3d3d3d" } else { "#2d2d2d" }
-                                )}
                             >
                                 <i class={format!("fas fa-eye{}", if layer.visible { "" } else { "-slash" })}></i>
                                 <div class="color-picker-container" onclick={prevent_toggle}>

@@ -1,4 +1,5 @@
 use crate::app_controller::AppController;
+use crate::app_controller::Theme;
 use crate::graphics::Renderer;
 use crate::graphics::Scene;
 use crate::Project;
@@ -102,6 +103,7 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
     let mut controller = AppController::new(renderer, scene, window_size.width, window_size.height);
 
     controller.set_project(project);
+    controller.apply_theme(Theme::Dark);
     controller.resize(window_size.width, window_size.height);
 
     let mut current_cursor_pos: Option<PhysicalPosition<f64>> = None;

@@ -10,6 +10,7 @@ pub struct HomePage {
     dropped_file: Option<(String, Vec<u8>)>,
     is_dragging: bool,
     toast_manager: ToastManager,
+    is_dark_theme: bool,
 }
 
 pub enum HomeMsg {
@@ -28,6 +29,7 @@ impl Component for HomePage {
             dropped_file: None,
             is_dragging: false,
             toast_manager: ToastManager::new(),
+            is_dark_theme: false,
         }
     }
 
@@ -122,7 +124,7 @@ impl Component for HomePage {
         let on_remove_toast = ctx.link().callback(HomeMsg::RemoveToast);
 
         html! {
-            <>
+            <div class={classes!("home-page-container", if self.is_dark_theme { "dark-theme" } else { "light-theme" })}>
                 <div class="tile-container">
                     <a href="https://github.com/prideout/layout-viewer"
                        class="tile"
@@ -165,7 +167,7 @@ impl Component for HomePage {
                     </div>
                 </div>
                 <ToastContainer toasts={self.toast_manager.toasts().to_vec()} on_remove={on_remove_toast} />
-            </>
+            </div>
         }
     }
 }

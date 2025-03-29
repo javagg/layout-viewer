@@ -1,8 +1,69 @@
+:root {
+  --bg-color: #2d2d2d;
+  --text-color: #333;
+  --sidebar-bg: #2d2d2d;
+  --sidebar-text: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --layer-bg: #3d3d3d;
+  --layer-hover: #4d4d4d;
+  --layer-text: #ffffff;
+  --layer-icon: #888;
+  --layer-icon-hover: #fff;
+  --range-track: #4d4d4d;
+  --range-thumb: #888;
+  --range-thumb-hover: #fff;
+  --floating-button-bg: rgba(45, 45, 45, 0.8);
+  --floating-button-border: rgba(255, 255, 255, 0.2);
+  --floating-button-hover-bg: rgba(60, 60, 60, 0.9);
+  --floating-button-hover-border: rgba(255, 255, 255, 0.4);
+  --floating-button-icon: #ffffff;
+  --toast-bg: rgba(45, 45, 45, 0.9);
+  --toast-text: #ffffff;
+  --layer-color-border: #4d4d4d;
+}
+
+.light-theme {
+  --bg-color: #f5f5f5;
+  --text-color: #333;
+  --sidebar-bg: #f5f5f5;
+  --sidebar-text: #333;
+  --sidebar-border: rgba(0, 0, 0, 0.1);
+  --layer-bg: #e0e0e0;
+  --layer-hover: #d0d0d0;
+  --layer-text: #333;
+  --layer-icon: #666;
+  --layer-icon-hover: #333;
+  --range-track: #d0d0d0;
+  --range-thumb: #666;
+  --range-thumb-hover: #333;
+  --floating-button-bg: rgba(255, 255, 255, 0.8);
+  --floating-button-border: rgba(0, 0, 0, 0.2);
+  --floating-button-hover-bg: rgba(240, 240, 240, 0.9);
+  --floating-button-hover-border: rgba(0, 0, 0, 0.4);
+  --floating-button-icon: #333;
+  --toast-bg: rgba(33, 37, 41, 0.9);
+  --toast-text: #ffffff;
+  --layer-color-border: #d0d0d0;
+}
+
 body {
   margin: 0;
   padding: 0;
   font-family: system-ui, -apple-system, sans-serif;
-  background-color: #f5f5f5;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.home-page-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-color);
 }
 
 .tile-container {
@@ -93,7 +154,7 @@ body {
   width: calc(100vw - 260px - 1px - 16px - 16px);
   height: 100vh;
   overflow: hidden;
-  background-color: #2d2d2d;
+  background-color: var(--bg-color);
 }
 
 .viewer-canvas {
@@ -118,9 +179,9 @@ body {
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
-  background-color: rgba(45, 45, 45, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background-color: var(--floating-button-bg);
+  border: 2px solid var(--floating-button-border);
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,17 +192,18 @@ body {
 }
 
 .floating-button:hover {
-  background-color: rgba(60, 60, 60, 0.9);
-  border-color: rgba(255, 255, 255, 0.4);
+  background-color: var(--floating-button-hover-bg);
+  border-color: var(--floating-button-hover-border);
   transform: translateY(-2px);
 }
 
 .floating-button i {
   font-size: 1.25rem;
+  color: var(--floating-button-icon);
 }
 
 .status-text {
-  color: white;
+  color: var(--sidebar-text);
   background: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -163,8 +225,8 @@ body {
 }
 
 .toast {
-  background-color: rgba(108, 117, 125, 0.9);
-  color: white;
+  background-color: var(--toast-bg);
+  color: var(--toast-text);
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -202,13 +264,13 @@ body {
   top: 0;
   bottom: 0;
   width: 260px;
-  background-color: #2d2d2d;
-  color: #ffffff;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid var(--sidebar-border);
 }
 
 .sidebar-header {
@@ -219,16 +281,16 @@ body {
 .sidebar-header button {
   flex: 1;
   padding: 0.5rem;
-  background-color: #3d3d3d;
+  background-color: var(--layer-bg);
   border: none;
   border-radius: 4px;
-  color: #ffffff;
+  color: var(--layer-text);
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .sidebar-header button:hover {
-  background-color: #4d4d4d;
+  background-color: var(--layer-hover);
 }
 
 .layer-list {
@@ -246,21 +308,22 @@ body {
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  background-color: var(--layer-bg);
 }
 
 .layer-item:hover {
-  background-color: #4d4d4d !important;
+  background-color: var(--layer-hover) !important;
 }
 
 .layer-item i {
   width: 20px;
   text-align: center;
-  color: #888;
+  color: var(--layer-icon);
   transition: color 0.2s ease;
 }
 
 .layer-item:hover i {
-  color: #fff;
+  color: var(--layer-icon-hover);
 }
 
 .layer-color {
@@ -270,7 +333,7 @@ body {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid #4d4d4d;
+  border: 1px solid var(--layer-color-border);
   cursor: pointer;
 }
 
@@ -289,7 +352,7 @@ body {
 .layer-item input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
   height: 4px;
-  background: #4d4d4d;
+  background: var(--range-track);
   border-radius: 2px;
 }
 
@@ -298,7 +361,7 @@ body {
   appearance: none;
   width: 8px;
   height: 16px;
-  background: #888;
+  background: var(--range-thumb);
   border-radius: 2px;
   cursor: pointer;
   margin-top: -6px;
@@ -308,7 +371,7 @@ body {
 .layer-item input[type="range"]::-moz-range-track {
   width: 100%;
   height: 4px;
-  background: #4d4d4d;
+  background: var(--range-track);
   border-radius: 2px;
   border: none;
 }
@@ -316,7 +379,7 @@ body {
 .layer-item input[type="range"]::-moz-range-thumb {
   width: 8px;
   height: 16px;
-  background: #888;
+  background: var(--range-thumb);
   border-radius: 2px;
   border: none;
   cursor: pointer;
@@ -324,11 +387,11 @@ body {
 }
 
 .layer-item input[type="range"]:hover::-webkit-slider-thumb {
-  background: #fff;
+  background: var(--range-thumb-hover);
 }
 
 .layer-item input[type="range"]:hover::-moz-range-thumb {
-  background: #fff;
+  background: var(--range-thumb-hover);
 }
 
 .color-picker-container {

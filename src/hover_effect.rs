@@ -2,6 +2,7 @@ use crate::app_shaders::FRAGMENT_SHADER;
 use crate::app_shaders::VERTEX_SHADER;
 
 use crate::core::PolygonRef;
+use crate::graphics::BlendMode;
 use crate::graphics::Geometry;
 use crate::graphics::Material;
 use crate::graphics::Mesh;
@@ -32,7 +33,7 @@ pub struct HoverEffect {
 impl HoverEffect {
     pub fn new(scene: &mut Scene) -> Self {
         let mut outline_material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
-        outline_material.set_blending(true);
+        outline_material.set_blending(BlendMode::SourceOver);
         let outline_material_id = scene.add_material(outline_material);
 
         let outline_geometry = Geometry::new();
