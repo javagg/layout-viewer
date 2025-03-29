@@ -34,7 +34,7 @@ impl Ribbon {
         Self {
             mesh: mesh_id,
             geometry: geometry_id,
-            width: 5000.0,
+            width: 1.0,
             closed: false,
         }
     }

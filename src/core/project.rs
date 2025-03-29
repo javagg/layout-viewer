@@ -37,7 +37,7 @@ pub struct Project {
     stats: LayoutStats,
     interner: StringInterner,
     bounds: BoundingBox,
-    rtree: RTree<PickResult>,
+    rtree: RTree<PolygonRef>,
 }
 
 impl Project {
@@ -248,7 +248,7 @@ impl Project {
             for boundary in &cell_def.boundary_elements {
                 let layer = &mut self.layers[boundary.layer as usize];
                 layer.add_boundary_element(boundary, identity);
-                rtree_items.push(PickResult {
+                rtree_items.push(PolygonRef {
                     aabb: layer.polygons.last().unwrap().envelope(),
                     layer: boundary.layer,
                     polygon: layer.polygons.len() - 1,
@@ -258,7 +258,7 @@ impl Project {
             for path in &cell_def.path_elements {
                 let layer = &mut self.layers[path.layer as usize];
                 layer.add_path_element(path, identity);
-                rtree_items.push(PickResult {
+                rtree_items.push(PolygonRef {
                     aabb: layer.polygons.last().unwrap().envelope(),
                     layer: path.layer,
                     polygon: layer.polygons.len() - 1,
@@ -306,7 +306,7 @@ impl Project {
         self.rtree = RTree::bulk_load(rtree_items);
     }
 
-    fn update_layers_recurse(&mut self, cell_id: CellId, rtree_items: &mut Vec<PickResult>) {
+    fn update_layers_recurse(&mut self, cell_id: CellId, rtree_items: &mut Vec<PolygonRef>) {
         let cell = self.cells.get(&cell_id).unwrap();
         if !cell.visible {
             return;
@@ -316,7 +316,7 @@ impl Project {
         for boundary in &cell_def.boundary_elements {
             let layer = &mut self.layers[boundary.layer as usize];
             layer.add_boundary_element(boundary, transform);
-            rtree_items.push(PickResult {
+            rtree_items.push(PolygonRef {
                 aabb: layer.polygons.last().unwrap().envelope(),
                 layer: boundary.layer,
                 polygon: layer.polygons.len() - 1,
@@ -326,7 +326,7 @@ impl Project {
         for path in &cell_def.path_elements {
             let layer = &mut self.layers[path.layer as usize];
             layer.add_path_element(path, transform);
-            rtree_items.push(PickResult {
+            rtree_items.push(PolygonRef {
                 aabb: layer.polygons.last().unwrap().envelope(),
                 layer: path.layer,
                 polygon: layer.polygons.len() - 1,
@@ -390,10 +390,10 @@ impl Project {
         self.bounds
     }
 
-    pub fn pick_cell(&self, x: f64, y: f64) -> Option<PickResult> {
+    pub fn pick_cell(&self, x: f64, y: f64) -> Option<PolygonRef> {
         let point = Point::new(x, y);
         let items = self.rtree.locate_all_at_point(&point);
-        let mut result: Option<PickResult> = None;
+        let mut result: Option<PolygonRef> = None;
         for item in items {
             if let Some(ref result) = result {
                 if item.layer < result.layer {
@@ -423,14 +423,14 @@ pub struct LayoutStats {
 }
 
 #[derive(Clone)]
-pub struct PickResult {
+pub struct PolygonRef {
     aabb: AABB<Point<f64>>,
     pub polygon: usize,
     pub layer: i16,
     pub cell_id: CellId,
 }
 
-impl Debug for PickResult {
+impl Debug for PolygonRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -440,15 +440,15 @@ impl Debug for PickResult {
     }
 }
 
-impl PartialEq for PickResult {
+impl PartialEq for PolygonRef {
     fn eq(&self, other: &Self) -> bool {
         self.polygon == other.polygon && self.layer == other.layer && self.cell_id == other.cell_id
     }
 }
 
-impl Eq for PickResult {}
+impl Eq for PolygonRef {}
 
-impl RTreeObject for PickResult {
+impl RTreeObject for PolygonRef {
     type Envelope = AABB<Point<f64>>;
 
     fn envelope(&self) -> Self::Envelope {
@@ -456,7 +456,7 @@ impl RTreeObject for PickResult {
     }
 }
 
-impl PointDistance for PickResult {
+impl PointDistance for PolygonRef {
     fn distance_2(&self, point: &Point<f64>) -> f64 {
         self.aabb.distance_2(point)
     }

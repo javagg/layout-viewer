@@ -1,7 +1,7 @@
 use crate::app_shaders::FRAGMENT_SHADER;
 use crate::app_shaders::VERTEX_SHADER;
 
-use crate::core::PickResult;
+use crate::core::PolygonRef;
 use crate::graphics::Geometry;
 use crate::graphics::Material;
 use crate::graphics::Mesh;
@@ -14,9 +14,17 @@ use geo::TriangulateEarcut;
 
 type Point2 = nalgebra::Point2<f64>;
 
-// TODO: this could hold Scene and Renderer refs because it has the same lifetime
+/// Parameters for setting a cell in the hover effect
+pub struct HoverParams<'a> {
+    pub selection: PolygonRef,
+    pub project: &'a Project,
+    pub scene: &'a mut Scene,
+    pub gl: &'a glow::Context,
+}
+
+/// Manages graphics primitives for a hover effect
 pub struct HoverEffect {
-    cell: Option<PickResult>,
+    polygon: Option<PolygonRef>,
     mesh: MeshId,
     ribbon: Ribbon,
 }
@@ -37,18 +45,18 @@ impl HoverEffect {
         let ribbon = Ribbon::new(scene);
 
         Self {
-            cell: None,
+            polygon: None,
             mesh,
             ribbon,
         }
     }
 
-    pub fn has_cell(&self, hit: &PickResult) -> bool {
-        self.cell == Some(hit.clone())
+    pub fn contains(&self, polygon: &PolygonRef) -> bool {
+        self.polygon == Some(polygon.clone())
     }
 
-    pub fn cell(&self) -> Option<PickResult> {
-        self.cell.clone()
+    pub fn polygon(&self) -> Option<PolygonRef> {
+        self.polygon.clone()
     }
 
     pub fn move_to_back(&mut self, scene: &mut Scene) {
@@ -56,25 +64,28 @@ impl HoverEffect {
         scene.move_mesh_to_back(self.ribbon.mesh());
     }
 
-    pub fn is_active(&self) -> bool {
-        self.cell.is_some()
+    pub fn is_visible(&self) -> bool {
+        self.polygon.is_some()
     }
 
     pub fn hide(&mut self, scene: &mut Scene) {
-        self.cell = None;
+        self.polygon = None;
         let mesh = scene.get_mesh_mut(&self.mesh).unwrap();
         mesh.visible = false;
         self.ribbon.hide(scene);
     }
 
-    pub fn update(
+    /// Activates the hover effect for a specific polygon.
+    pub fn show(
         &mut self,
-        selection: PickResult,
-        project: &Project,
-        scene: &mut Scene,
-        gl: &glow::Context,
+        HoverParams {
+            selection,
+            project,
+            scene,
+            gl,
+        }: HoverParams,
     ) {
-        self.cell = Some(selection.clone());
+        self.polygon = Some(selection.clone());
 
         let layer = &project.layers()[selection.layer as usize];
         let polygon = &layer.polygons[selection.polygon];

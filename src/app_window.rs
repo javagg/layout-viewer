@@ -145,12 +145,10 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
                             winit::event::ElementState::Pressed => {
                                 if let Some(pos) = current_cursor_pos {
                                     controller.handle_mouse_press(pos.x as u32, pos.y as u32);
-                                    controller.render();
                                 }
                             }
                             winit::event::ElementState::Released => {
                                 controller.handle_mouse_release();
-                                controller.render();
                             }
                         }
                     }
@@ -162,7 +160,6 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
                             winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y,
                         };
                         controller.handle_mouse_wheel(pos.x as u32, pos.y as u32, delta_y);
-                        controller.render();
                     }
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -171,7 +168,6 @@ pub fn spawn_window(project: Project) -> anyhow::Result<()> {
                     let y = position.y as u32;
 
                     controller.handle_mouse_move(x, y);
-                    controller.render();
                 }
                 WindowEvent::Resized(size) => {
                     surface.resize(

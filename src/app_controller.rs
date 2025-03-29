@@ -9,6 +9,7 @@ use crate::graphics::Renderer;
 use crate::graphics::Scene;
 use crate::graphics::Viewport;
 use crate::hover_effect::HoverEffect;
+use crate::hover_effect::HoverParams;
 use crate::Project;
 
 use geo::TriangulateEarcut;
@@ -104,6 +105,7 @@ impl AppController {
                 pos.x -= dx;
                 pos.y -= dy;
                 self.camera.position = pos;
+                self.render();
             }
             self.last_mouse_pos = Some((x, y));
         }
@@ -117,11 +119,16 @@ impl AppController {
         };
 
         if let Some(hit) = project.pick_cell(world_x, world_y) {
-            if !self.hover_effect.has_cell(&hit) {
-                self.hover_effect
-                    .update(hit, &project, &mut self.scene, self.renderer.gl());
+            if !self.hover_effect.contains(&hit) {
+                self.hover_effect.show(HoverParams {
+                    selection: hit,
+                    project: &project,
+                    scene: &mut self.scene,
+                    gl: self.renderer.gl(),
+                });
+                self.render();
             }
-        } else if self.hover_effect.is_active() {
+        } else if self.hover_effect.is_visible() {
             self.hover_effect.hide(&mut self.scene);
             self.render();
         }
@@ -158,10 +165,12 @@ impl AppController {
         // Adjust camera position to keep cursor point stable
         self.camera.position.x += world_x - new_world_x;
         self.camera.position.y += world_y - new_world_y;
+
+        self.render();
     }
 
     pub fn handle_mouse_leave(&mut self) {
-        if self.hover_effect.is_active() {
+        if self.hover_effect.is_visible() {
             self.hover_effect.hide(&mut self.scene);
             self.render();
         }

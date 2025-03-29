@@ -56,16 +56,12 @@ trunk serve
 
 ## Next tasks
 
-"Hide all" does not actually hide everything
-  ... and colors get mismatched
-
 Outline
+  - Fix mitering in Ribbon (temporarily make width large)
+  - Enable screen-space width in Ribbon using VS
 
-- TODO in `hover_effect`
-- Fix mitering in Ribbon
-- Add SS width to Ribbon
-- Consider replacing Ribbon with inflated polygon
-- - https://github.com/iShape-Rust/iOverlay?tab=readme-ov-file#offseting-a-polygon
+Bug: "Hide all" does not actually hide everything
+  ... and colors get mismatched
 
 Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
 

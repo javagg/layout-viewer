@@ -270,22 +270,18 @@ impl Component for ViewerPage {
             }
             ViewerMsg::MousePress(x, y) => {
                 controller.handle_mouse_press(x, y);
-                controller.render();
                 false
             }
             ViewerMsg::MouseRelease => {
                 controller.handle_mouse_release();
-                controller.render();
                 false
             }
             ViewerMsg::MouseMove(x, y) => {
                 controller.handle_mouse_move(x, y);
-                controller.render();
                 false
             }
             ViewerMsg::MouseWheel(x, y, delta) => {
                 controller.handle_mouse_wheel(x, y, -delta);
-                controller.render();
                 false
             }
             ViewerMsg::MouseLeave => {
