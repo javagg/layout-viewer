@@ -93,8 +93,8 @@ impl Camera {
         let (window_width, window_height) = window_size;
         let window_aspect = window_width as f64 / window_height as f64;
 
-        let world_width = world_bounds.width() as f64;
-        let world_height = world_bounds.height() as f64;
+        let world_width = world_bounds.width();
+        let world_height = world_bounds.height();
         let world_aspect = world_width / world_height;
 
         if window_aspect > world_aspect {
@@ -108,7 +108,7 @@ impl Camera {
         }
 
         // Center the camera on the world bounds
-        self.position.x = world_bounds.min_x as f64 + world_width / 2.0;
-        self.position.y = world_bounds.min_y as f64 + world_height / 2.0;
+        self.position.x = world_bounds.min_x + world_width / 2.0;
+        self.position.y = world_bounds.min_y + world_height / 2.0;
     }
 }

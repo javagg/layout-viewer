@@ -57,11 +57,8 @@ trunk serve
 ## Next tasks
 
 Outline
-  - Fix mitering in Ribbon (temporarily make width large)
-  - Enable screen-space width in Ribbon using VS
-
-Bug: "Hide all" does not actually hide everything
-  ... and colors get mismatched
+  - Fix mitering in Ribbon (use huge width to test)
+  - Enable screen-space width in Ribbon via vertex shader
 
 Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
 

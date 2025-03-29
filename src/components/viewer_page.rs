@@ -19,7 +19,6 @@ use crate::components::Route;
 use crate::components::Sidebar;
 use crate::components::ToastContainer;
 use crate::components::ToastManager;
-use crate::graphics::MeshId;
 use crate::graphics::Renderer;
 use crate::graphics::Scene;
 use crate::rsutils::hex_to_rgb;
@@ -304,22 +303,14 @@ impl Component for ViewerPage {
                         .layers()
                         .iter()
                         .enumerate()
-                        .filter_map(|(index, layer)| {
-                            if layer.polygons.is_empty() {
-                                return None;
-                            }
-                            let color = if index == project.layers().len() - 1 {
-                                // Make highest layer white
-                                rgb_to_hex(1.0, 1.0, 1.0)
-                            } else {
-                                rgb_to_hex(layer.color.x, layer.color.y, layer.color.z)
-                            };
-                            Some(LayerProxy {
+                        .map(|(index, layer)| {
+                            LayerProxy {
                                 index,
                                 visible: layer.visible,
                                 opacity: layer.color.w,
-                                color,
-                            })
+                                color: rgb_to_hex(layer.color.x, layer.color.y, layer.color.z),
+                                is_empty: layer.polygons.is_empty(),
+                            }
                         })
                         .collect();
                 }
@@ -355,17 +346,10 @@ impl Component for ViewerPage {
                     }
                     layer.color
                 };
-                let mesh_id = MeshId(1 + layer_proxy.index);
-                let mesh = controller.scene().get_mesh_mut(&mesh_id).unwrap();
+                let mesh = controller.get_mesh_for_layer_mut(layer_proxy.index);
                 mesh.set_vec4("color", color);
                 mesh.visible = layer_proxy.visible;
-                if let Some(layer) = self
-                    .layer_proxies
-                    .iter_mut()
-                    .find(|layer| layer.index == layer_proxy.index)
-                {
-                    *layer = layer_proxy.clone();
-                }
+                self.layer_proxies[layer_proxy.index] = layer_proxy.clone();
                 controller.render();
                 true
             }

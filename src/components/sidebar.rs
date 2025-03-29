@@ -7,6 +7,7 @@ pub struct LayerProxy {
     pub visible: bool,
     pub opacity: f32,
     pub color: String,
+    pub is_empty: bool,
 }
 
 #[derive(Properties, PartialEq)]
@@ -44,7 +45,10 @@ impl Component for Sidebar {
                     <button onclick={show_all}>{"Show All"}</button>
                 </div>
                 <div class="layer-list">
-                    {ctx.props().layers.iter().map(|layer| {
+                    {ctx.props().layers.iter().filter_map(|layer| {
+                        if layer.is_empty {
+                            return None;
+                        }
                         let index = layer.index;
                         let toggle_layer = ctx.link().callback(move |_| SidebarMsg::ToggleLayer(index));
                         let update_opacity = ctx.link().callback(move |e: InputEvent| {
@@ -60,7 +64,7 @@ impl Component for Sidebar {
                             e.stop_propagation();
                         };
 
-                        html! {
+                        Some(html! {
                             <div
                                 class="layer-item"
                                 key={layer.index}
@@ -91,7 +95,7 @@ impl Component for Sidebar {
                                     onclick={prevent_toggle}
                                 />
                             </div>
-                        }
+                        })
                     }).collect::<Html>()}
                 </div>
             </div>
@@ -99,8 +103,6 @@ impl Component for Sidebar {
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        let find_layer_proxy =
-            |index: usize| ctx.props().layers.iter().find(|layer| layer.index == index);
         match msg {
             SidebarMsg::HideAll => {
                 for layer in &ctx.props().layers {
@@ -119,27 +121,21 @@ impl Component for Sidebar {
                 true
             }
             SidebarMsg::ToggleLayer(index) => {
-                if let Some(layer) = find_layer_proxy(index) {
-                    let mut layer = layer.clone();
-                    layer.visible = !layer.visible;
-                    ctx.props().update_layer.emit(layer.clone());
-                }
+                let mut layer = ctx.props().layers[index].clone();
+                layer.visible = !layer.visible;
+                ctx.props().update_layer.emit(layer);
                 true
             }
             SidebarMsg::UpdateOpacity(index, opacity) => {
-                if let Some(layer) = find_layer_proxy(index) {
-                    let mut layer = layer.clone();
-                    layer.opacity = opacity;
-                    ctx.props().update_layer.emit(layer.clone());
-                }
+                let mut layer = ctx.props().layers[index].clone();
+                layer.opacity = opacity;
+                ctx.props().update_layer.emit(layer);
                 true
             }
             SidebarMsg::UpdateColor(index, color) => {
-                if let Some(layer) = find_layer_proxy(index) {
-                    let mut layer = layer.clone();
-                    layer.color = color.clone();
-                    ctx.props().update_layer.emit(layer.clone());
-                }
+                let mut layer = ctx.props().layers[index].clone();
+                layer.color = color.clone();
+                ctx.props().update_layer.emit(layer);
                 true
             }
         }

@@ -56,6 +56,18 @@ impl AppController {
         }
     }
 
+    pub fn get_mesh_for_layer(&self, layer_index: usize) -> &Mesh {
+        let layer = &self.project.as_ref().unwrap().layers()[layer_index];
+        let id = layer.mesh.unwrap();
+        self.scene.get_mesh(&id).unwrap()
+    }
+
+    pub fn get_mesh_for_layer_mut(&mut self, layer_index: usize) -> &mut Mesh {
+        let layer = &self.project.as_ref().unwrap().layers()[layer_index];
+        let id = layer.mesh.unwrap();
+        self.scene.get_mesh_mut(&id).unwrap()
+    }
+
     pub fn set_project(&mut self, mut project: Project) {
         let stats = project.stats();
         log::info!("Number of structs: {}", stats.struct_count);
@@ -71,7 +83,7 @@ impl AppController {
             layer.color.w = alpha;
         }
 
-        populate_scene(project.layers(), &mut self.scene);
+        populate_scene(project.layers_mut(), &mut self.scene);
 
         self.hover_effect.move_to_back(&mut self.scene);
 
@@ -242,7 +254,7 @@ impl Drop for AppController {
     }
 }
 
-pub fn populate_scene(layers: &[Layer], scene: &mut Scene) {
+pub fn populate_scene(layers: &mut [Layer], scene: &mut Scene) {
     let mut material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
 
     material.set_blending(true);
@@ -257,7 +269,8 @@ pub fn populate_scene(layers: &[Layer], scene: &mut Scene) {
         // Set the color uniform using the layer's color
         mesh.set_vec4("color", layer.color);
 
-        scene.add_mesh(mesh);
+        let id = scene.add_mesh(mesh);
+        layer.mesh = Some(id);
     }
 }
 

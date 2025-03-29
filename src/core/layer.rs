@@ -1,4 +1,5 @@
 use crate::graphics::BoundingBox;
+use crate::graphics::MeshId;
 use gds21::GdsBoundary;
 use gds21::GdsPath;
 use gds21::GdsPoint;
@@ -18,6 +19,7 @@ type Vec2d = geo::Point<f64>;
 
 pub struct Layer {
     index: i16,
+    pub mesh: Option<MeshId>,
     pub polygons: Vec<Polygon>,
     pub bounds: BoundingBox,
     pub paths: Vec<GdsPath>,
@@ -30,6 +32,7 @@ impl Layer {
     pub fn new(index: i16) -> Self {
         Self {
             index,
+            mesh: None,
             polygons: vec![],
             bounds: BoundingBox::new(),
             paths: Vec::new(),
