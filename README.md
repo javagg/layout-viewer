@@ -56,13 +56,6 @@ trunk serve
 
 ## Next tasks
 
-Theme  
-  Create an opacity dial
-
-Outline
-  - Fix mitering in Ribbon (use huge width to test)
-  - Enable screen-space width in Ribbon via vertex shader
-
 Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
 
 Implement array refs.

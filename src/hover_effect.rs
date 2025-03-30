@@ -26,29 +26,36 @@ pub struct HoverParams<'a> {
 /// Manages graphics primitives for a hover effect
 pub struct HoverEffect {
     polygon: Option<PolygonRef>,
-    mesh: MeshId,
-    ribbon: Ribbon,
+    fill: MeshId,
+    stroke: Ribbon,
 }
 
 impl HoverEffect {
     pub fn new(scene: &mut Scene) -> Self {
-        let mut outline_material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
-        outline_material.set_blending(BlendMode::SourceOver);
-        let outline_material_id = scene.add_material(outline_material);
+        let mut fill_material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
+        fill_material.set_blending(BlendMode::SourceOver);
+        let fill_material = scene.add_material(fill_material);
 
-        let outline_geometry = Geometry::new();
-        let outline_geometry_id = scene.add_geometry(outline_geometry);
+        let fill_geometry = Geometry::new();
+        let fill_geometry_id = scene.add_geometry(fill_geometry);
 
-        let mut outline_mesh = Mesh::new(outline_geometry_id, outline_material_id);
-        outline_mesh.visible = false;
+        let mut fill_mesh = Mesh::new(fill_geometry_id, fill_material);
+        fill_mesh.visible = false;
 
-        let mesh = scene.add_mesh(outline_mesh);
+        let fill_mesh = scene.add_mesh(fill_mesh);
         let ribbon = Ribbon::new(scene);
 
         Self {
             polygon: None,
-            mesh,
-            ribbon,
+            fill: fill_mesh,
+            stroke: ribbon,
+        }
+    }
+
+    pub fn update_stroke_width(&mut self, width: f64, scene: &mut Scene, gl: &glow::Context) {
+        if self.stroke.width != width {
+            self.stroke.width = width;
+            self.stroke.update(scene, gl);
         }
     }
 
@@ -61,8 +68,8 @@ impl HoverEffect {
     }
 
     pub fn move_to_back(&mut self, scene: &mut Scene) {
-        scene.move_mesh_to_back(self.mesh);
-        scene.move_mesh_to_back(self.ribbon.mesh());
+        scene.move_mesh_to_back(self.fill);
+        scene.move_mesh_to_back(self.stroke.mesh());
     }
 
     pub fn is_visible(&self) -> bool {
@@ -71,9 +78,9 @@ impl HoverEffect {
 
     pub fn hide(&mut self, scene: &mut Scene) {
         self.polygon = None;
-        let mesh = scene.get_mesh_mut(&self.mesh).unwrap();
+        let mesh = scene.get_mesh_mut(&self.fill).unwrap();
         mesh.visible = false;
-        self.ribbon.hide(scene);
+        self.stroke.hide(scene);
     }
 
     /// Activates the hover effect for a specific polygon.
@@ -94,14 +101,15 @@ impl HoverEffect {
         let triangles = polygon.earcut_triangles_raw();
 
         let mut color = layer.color;
-        color.w = 1.0;
+        color.w = 0.5;
 
         let mut points = Vec::new();
         for coord in polygon.exterior().points() {
             points.push(Point2::new(coord.x(), coord.y()));
         }
 
-        self.ribbon.update_geometry(scene, gl, &points);
+        self.stroke.spine = points;
+        self.stroke.update(scene, gl);
 
         let mut geometry = Geometry::new();
 
@@ -118,7 +126,7 @@ impl HoverEffect {
             geometry.indices.push(index as u32);
         }
 
-        let mesh = scene.get_mesh_mut(&self.mesh).unwrap();
+        let mesh = scene.get_mesh_mut(&self.fill).unwrap();
         mesh.visible = true;
         mesh.set_vec4("color", color);
         let geometry_id = mesh.geometry_id;

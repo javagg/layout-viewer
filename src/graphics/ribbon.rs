@@ -1,5 +1,6 @@
 use super::ribbon_shaders::FRAGMENT_SHADER;
 use super::ribbon_shaders::VERTEX_SHADER;
+use super::BlendMode;
 use super::Geometry;
 use super::GeometryId;
 use super::Material;
@@ -14,6 +15,7 @@ type Vector4f = nalgebra::Vector4<f32>;
 pub struct Ribbon {
     mesh: MeshId,
     geometry: GeometryId,
+    pub spine: Vec<Point2d>,
     pub width: f64,
     pub closed: bool,
 }
@@ -23,19 +25,21 @@ impl Ribbon {
         let geometry = Geometry::new();
         let geometry_id = scene.add_geometry(geometry);
 
-        let material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
+        let mut material = Material::new(VERTEX_SHADER, FRAGMENT_SHADER);
+        material.set_blending(BlendMode::SourceOver);
         let material_id = scene.add_material(material);
 
         let mut mesh = Mesh::new(geometry_id, material_id);
         mesh.visible = false;
-        mesh.set_vec4("color", Vector4f::new(1.0, 1.0, 1.0, 1.0));
+        mesh.set_vec4("color", Vector4f::new(0.0, 0.4, 0.6, 1.0));
         let mesh_id = scene.add_mesh(mesh);
 
         Self {
             mesh: mesh_id,
             geometry: geometry_id,
-            width: 1.0,
-            closed: false,
+            spine: Vec::new(),
+            width: 5000.0,
+            closed: true,
         }
     }
 
@@ -51,7 +55,9 @@ impl Ribbon {
         self.mesh
     }
 
-    pub fn update_geometry(&self, scene: &mut Scene, gl: &glow::Context, points: &[Point2d]) {
+    pub fn update(&mut self, scene: &mut Scene, gl: &glow::Context) {
+        let points = &self.spine;
+
         if points.len() < 2 {
             scene.get_mesh_mut(&self.mesh).unwrap().visible = false;
             return;
@@ -72,55 +78,39 @@ impl Ribbon {
             indices.extend_from_slice(&[a, b, c]);
         };
 
-        // Calculate mitered points for each segment
-        for i in 0..points.len() {
-            let prev = if i == 0 {
-                if self.closed {
-                    points[points.len() - 1]
-                } else {
-                    points[0]
-                }
-            } else {
-                points[i - 1]
-            };
+        let count = if self.closed { points.len() - 1 } else { points.len() };
 
-            let curr = points[i];
-            let next = if i == points.len() - 1 {
-                if self.closed {
-                    points[0]
-                } else {
-                    points[i]
-                }
-            } else {
-                points[i + 1]
-            };
+        let upper = if self.closed { count + 1 } else { count };
 
-            // Calculate direction vectors
-            let dir1 = Vector2d::new(curr.x - prev.x, curr.y - prev.y).normalize();
-            let dir2 = Vector2d::new(next.x - curr.x, next.y - curr.y).normalize();
+        for i in 0..upper {
+            let prev = points[(i + count - 1) % count];
+            let curr = points[i % count];
+            let next = points[(i + 1) % count];
 
-            // Calculate miter direction
+            let mut dir1 = (curr - prev).normalize();
+            let mut dir2 = (next - curr).normalize();
+
+            if !self.closed && i == 0 {
+                dir1 = dir2;
+            }
+
+            if !self.closed && i == count - 1 {
+                dir2 = dir1;
+            }
+
+            let normal = Vector2d::new(-dir1.y, dir1.x);
+
             let miter_dir = (dir1 + dir2).normalize();
-            let miter_length = self.width / (1.0 + dir1.dot(&dir2)).sqrt();
+            let miter_dir = Vector2d::new(-miter_dir.y, miter_dir.x);
 
-            // Calculate offset points
-            let offset1 = Point2d::new(
-                curr.x + miter_dir.x * miter_length,
-                curr.y + miter_dir.y * miter_length,
-            );
-            let offset2 = Point2d::new(
-                curr.x - miter_dir.x * miter_length,
-                curr.y - miter_dir.y * miter_length,
-            );
+            let miter_length = 0.5 * self.width / normal.dot(&miter_dir);
 
-            // Add points and create triangles
-            let base_idx = positions.len() as u32 / 3;
-            add_point(&mut positions, offset1);
-            add_point(&mut positions, offset2);
-
+            let base = positions.len() as u32 / 3;
+            add_point(&mut positions, curr + miter_dir * miter_length);
+            add_point(&mut positions, curr - miter_dir * miter_length);
             if i > 0 {
-                add_triangle(&mut indices, base_idx - 2, base_idx, base_idx - 1);
-                add_triangle(&mut indices, base_idx - 1, base_idx, base_idx + 1);
+                add_triangle(&mut indices, base - 2, base, base - 1);
+                add_triangle(&mut indices, base - 1, base, base + 1);
             }
         }
 

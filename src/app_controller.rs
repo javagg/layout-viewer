@@ -209,6 +209,10 @@ impl AppController {
         if !self.needs_render {
             return false;
         }
+
+        let width = 5.0 * self.camera.width / self.window_size.0 as f64;
+        self.hover_effect.update_stroke_width(width, &mut self.scene, self.renderer.gl());
+
         self.renderer.render(&mut self.scene, &self.camera);
         self.renderer.check_gl_error("Scene render");
         self.needs_render = false;
