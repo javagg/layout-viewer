@@ -1,27 +1,12 @@
-#![allow(dead_code)]
-
-mod app_controller;
-mod app_shaders;
-mod core;
-mod generate_svg;
-mod graphics;
-mod hover_effect;
-mod rsutils;
-
-#[cfg(not(target_arch = "wasm32"))]
-mod app_window;
+pub mod core;
+pub mod graphics;
+pub mod rsutils;
 
 #[cfg(target_arch = "wasm32")]
-mod components;
+pub mod webui;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use app_window::spawn_window;
-
-pub use core::Project;
-pub use generate_svg::generate_svg;
-
-#[cfg(target_arch = "wasm32")]
-pub use components::App;
+pub mod cli;
 
 /// Returns a timestamp in milliseconds.
 #[cfg(target_arch = "wasm32")]

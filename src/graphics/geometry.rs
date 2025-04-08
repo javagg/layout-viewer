@@ -1,16 +1,9 @@
-use crate::rsutils::IdMapKey;
+use bevy_ecs::component::Component;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
 use glow::HasContext;
-use std::hash::Hash;
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct GeometryId(pub usize);
-
-impl IdMapKey for GeometryId {
-    fn from_usize(id: usize) -> Self {
-        GeometryId(id)
-    }
-}
-
+#[derive(Component)]
 pub struct Geometry {
     pub positions: Vec<f32>,
     pub indices: Vec<u32>,
@@ -34,7 +27,7 @@ impl Geometry {
         }
     }
 
-    pub(super) fn destroy(&mut self, gl: &glow::Context) {
+    pub fn destroy(&mut self, gl: &glow::Context) {
         unsafe {
             if let Some(vao) = self.vao.take() {
                 gl.delete_vertex_array(vao)
@@ -46,7 +39,28 @@ impl Geometry {
         }
     }
 
-    pub(super) fn upload_positions(&mut self, gl: &glow::Context) {
+    /// Replaces the geometry of an entity with self.
+    pub fn replace(self: Geometry, world: &mut World, gl: &glow::Context, entity: Entity) {
+        if let Some(mut geometry) = world.get_mut::<Geometry>(entity) {
+            geometry.destroy(gl);
+            world.entity_mut(entity).remove::<Geometry>();
+        }
+        world.entity_mut(entity).insert(self);
+    }
+
+    pub fn bind(&mut self, gl: &glow::Context) {
+        if !self.positions_uploaded {
+            self.upload_positions(gl);
+        }
+        if !self.indices_uploaded {
+            self.upload_indices(gl);
+        }
+        unsafe {
+            gl.bind_vertex_array(self.vao);
+        }
+    }
+
+    fn upload_positions(&mut self, gl: &glow::Context) {
         if self.positions.is_empty() {
             log::warn!("Attempting to upload empty positions buffer");
             self.positions_uploaded = true;
@@ -71,7 +85,7 @@ impl Geometry {
         self.positions_uploaded = true;
     }
 
-    pub(super) fn upload_indices(&mut self, gl: &glow::Context) {
+    fn upload_indices(&mut self, gl: &glow::Context) {
         if self.indices.is_empty() {
             log::warn!("Attempting to upload empty indices buffer");
             self.indices_uploaded = true;
@@ -92,18 +106,6 @@ impl Geometry {
             );
         }
         self.indices_uploaded = true;
-    }
-
-    pub(super) fn bind(&mut self, gl: &glow::Context) {
-        if !self.positions_uploaded {
-            self.upload_positions(gl);
-        }
-        if !self.indices_uploaded {
-            self.upload_indices(gl);
-        }
-        unsafe {
-            gl.bind_vertex_array(self.vao);
-        }
     }
 
     fn create(&mut self, gl: &glow::Context) {

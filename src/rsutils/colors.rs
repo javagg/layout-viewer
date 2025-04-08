@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 /// Convert a hex color string (with or without #) to RGB values in range [0, 1]
 pub fn hex_to_rgb(hex: &str) -> Option<(f32, f32, f32)> {
     let hex = hex.trim_start_matches('#');

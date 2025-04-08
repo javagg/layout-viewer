@@ -1,6 +1,7 @@
-use crate::components::Route;
-use crate::components::ToastContainer;
-use crate::components::ToastManager;
+use crate::webui::app::Route;
+use crate::webui::toast::ToastContainer;
+use crate::webui::toast::ToastManager;
+
 use wasm_bindgen_futures::JsFuture;
 use web_sys::DragEvent;
 use yew::prelude::*;
@@ -179,4 +180,9 @@ static mut DROPPED_FILE: Option<(String, Vec<u8>)> = None;
 #[allow(static_mut_refs)]
 pub fn take_dropped_file() -> Option<(String, Vec<u8>)> {
     unsafe { DROPPED_FILE.take() }
+}
+
+#[allow(static_mut_refs)]
+pub fn has_dropped_file() -> bool {
+    unsafe { DROPPED_FILE.is_some() }
 }

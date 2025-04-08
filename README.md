@@ -10,17 +10,17 @@ a static site hosted with GitHub Pages.
 
 ## Modules
 
-- `core` is the data model for the application.
-  - All types related to **Project** are defined here.
-  - May include caches and acceleration structures.
+- `core` contains the data model and core logic.
+  - Defines a set of ECS components.  
 - `graphics` is a simple WebGL rendering library.
   - Provides abstractions similar to libraries like THREE and Filament.
   - Knows nothing about circuits or app behavior.
   - All objects except **Renderer** can be constructed without a WebGL
     context.
-- `components` defines a set of Yew components.
+- `webui` defines a set of Yew components.
   - The UI for the web application lives here.
   - Components with the **Page** suffix are navigation targets.
+- `cli` provides a command-line interface and simple native window target.
 - `rsutils` are utilities that you could imagine being a part of **std**.
   - Nothing here should know about circuits or the app.
 
@@ -37,7 +37,7 @@ cargo run --release --quiet --bin layout-viewer -- --gl assets/gds/caravel.gds
 cargo run --quiet --bin layout-viewer -- --gl assets/gds/mos-6502.gds mos-6502.svg
 
 # Deploy a local web server:
-trunk serve
+trunk serve --open
 ```
 
 ## Limitations
@@ -49,21 +49,8 @@ trunk serve
 
 ## Dependencies
 
+- bevy_ecs: Entity-component-system
 - gds21: GDSII parser
 - svg: SVG generation
 - wasm-bindgen: WebAssembly bindings
 - anyhow: Error handling
-
-## Next tasks
-
-Test / fix the app on mobile devices. (pointer events, not mouse events; hide sidebar)
-
-Implement array refs.
-
-Performance / smooth zoom.
-
-Camera constraints / frame upon selection / "Reset view".
-
-Van Wijk interpolation / marquee selection.
-
-Better CI (Build & Run CLI, Doc Tests, Unit Tests).

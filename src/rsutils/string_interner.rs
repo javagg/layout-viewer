@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use indexmap::IndexMap;
 
 pub struct StringInterner {
@@ -25,10 +27,7 @@ impl StringInterner {
         }
     }
 
-    pub fn get(&self, id: usize) -> &str {
-        &self.strings[id]
-    }
-
+    #[allow(dead_code)]
     pub fn get_id(&self, s: &str) -> Option<usize> {
         self.ids.get(s).copied()
     }

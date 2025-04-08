@@ -1,12 +1,20 @@
-use crate::graphics::Camera;
-use crate::graphics::Scene;
-use crate::graphics::Viewport;
+use crate::graphics::camera::Camera;
+use crate::graphics::geometry::Geometry;
+use crate::graphics::material::Material;
+use crate::graphics::mesh::Mesh;
+use crate::graphics::viewport::Viewport;
+
+use bevy_ecs::entity::Entity;
+use bevy_ecs::query::QueryState;
+use bevy_ecs::system::lifetimeless::Read;
+use bevy_ecs::world::World;
 use glow::*;
 
 pub struct Renderer {
     gl: glow::Context,
     viewport: Viewport,
     clear_color: (f32, f32, f32, f32),
+    mesh_query: Option<QueryState<(Entity, Read<Mesh>)>>,
 }
 
 impl Renderer {
@@ -20,7 +28,12 @@ impl Renderer {
                 height: 600.0,
             },
             clear_color: (0.0, 0.0, 0.0, 0.0),
+            mesh_query: None,
         }
+    }
+
+    pub fn on_new_world(&mut self, world: &mut World) {
+        self.mesh_query = Some(world.query());
     }
 
     pub fn gl(&self) -> &glow::Context {
@@ -66,19 +79,12 @@ impl Renderer {
         self.viewport = viewport;
     }
 
-    pub fn get_viewport(&self) -> Viewport {
-        self.viewport
-    }
-
+    #[allow(dead_code)]
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.clear_color = (r, g, b, a);
     }
 
-    pub fn get_clear_color(&self) -> (f32, f32, f32, f32) {
-        self.clear_color
-    }
-
-    pub fn render(&self, scene: &mut Scene, camera: &Camera) {
+    pub fn render(&mut self, world: &mut World, camera: &Camera) {
         unsafe {
             let gl = &self.gl;
             let vp = &self.viewport;
@@ -96,17 +102,29 @@ impl Renderer {
             let projection = camera.get_projection_matrix().cast::<f32>();
             let view_matrix = camera.get_view_matrix().cast::<f32>();
 
-            for mesh in scene.meshes.values() {
-                let material = scene.materials.get_mut(&mesh.material_id).unwrap();
-                let geometry = scene.geometries.get_mut(&mesh.geometry_id).unwrap();
+            let mesh_query = self.mesh_query.get_or_insert_with(|| world.query());
 
-                let model_matrix = mesh.matrix;
-                material.bind(gl);
-                material.set_mat4(&self.gl, "model", &model_matrix);
-                material.set_mat4(&self.gl, "view", &view_matrix);
-                material.set_mat4(&self.gl, "projection", &projection);
+            let meshes = mesh_query.iter(world).filter_map(|(entity, mesh)| {
+                if mesh.visible {
+                    Some((entity, mesh.geometry, mesh.material, mesh.render_order))
+                } else {
+                    None
+                }
+            });
 
-                mesh.draw(gl, material, geometry);
+            let mut meshes: Vec<_> = meshes.collect();
+
+            meshes.sort_by_key(|(_, _, _, render_order)| *render_order);
+
+            for (mesh, geo, mat, _) in meshes {
+                let [mesh, mut geo, mut mat] = world.entity_mut([mesh, geo, mat]);
+                let mesh = mesh.get::<Mesh>().unwrap();
+                let mut geo = geo.get_mut::<Geometry>().unwrap();
+                let mut mat = mat.get_mut::<Material>().unwrap();
+                mat.bind(gl);
+                mat.set_mat4(gl, "view", &view_matrix);
+                mat.set_mat4(gl, "projection", &projection);
+                mesh.draw(gl, &mut mat, &mut geo);
             }
         }
     }

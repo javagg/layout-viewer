@@ -5,17 +5,8 @@ pub mod material;
 pub mod mesh;
 pub mod renderer;
 pub mod ribbon;
-pub mod scene;
+pub mod vectors;
 pub mod viewport;
 
+mod default_shaders;
 mod ribbon_shaders;
-
-pub use bounds::*;
-pub use camera::*;
-pub use geometry::*;
-pub use material::*;
-pub use mesh::*;
-pub use renderer::*;
-pub use ribbon::*;
-pub use scene::*;
-pub use viewport::*;

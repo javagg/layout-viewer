@@ -1,4 +1,6 @@
-use crate::rsutils::IdMapKey;
+use super::default_shaders::FRAGMENT_SHADER;
+use super::default_shaders::VERTEX_SHADER;
+use bevy_ecs::component::Component;
 use glow::HasContext;
 use indexmap::IndexMap;
 use nalgebra::Matrix4;
@@ -8,28 +10,28 @@ use nalgebra::Vector4;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct MaterialId(pub usize);
-
-impl IdMapKey for MaterialId {
-    fn from_usize(id: usize) -> Self {
-        MaterialId(id)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum BlendMode {
     Disabled,
     SourceOver,
     Additive,
 }
 
+#[derive(Component)]
 pub struct Material {
     program: Option<glow::Program>,
     uniform_locations: IndexMap<String, glow::UniformLocation>,
     vertex_shader: String,
     fragment_shader: String,
     blend_mode: BlendMode,
+    depth_test: bool,
 }
+
+// SAFETY: This is safe because:
+// 1. The app is single-threaded
+// 2. OpenGL resources are only accessed from the render thread
+// 3. The uniform locations are only modified during program creation
+unsafe impl Send for Material {}
+unsafe impl Sync for Material {}
 
 impl Material {
     pub fn new(vertex_shader: &str, fragment_shader: &str) -> Self {
@@ -39,6 +41,7 @@ impl Material {
             vertex_shader: vertex_shader.to_string(),
             fragment_shader: fragment_shader.to_string(),
             blend_mode: BlendMode::Disabled,
+            depth_test: false,
         }
     }
 
@@ -46,6 +49,7 @@ impl Material {
         self.blend_mode = mode;
     }
 
+    #[allow(dead_code)]
     pub fn blend_mode(&self) -> BlendMode {
         self.blend_mode
     }
@@ -98,7 +102,6 @@ impl Material {
             }
 
             self.program = Some(program);
-
             self.gather_uniforms(gl);
         }
     }
@@ -135,6 +138,12 @@ impl Material {
 
         unsafe {
             gl.use_program(self.program);
+
+            if self.depth_test {
+                gl.enable(glow::DEPTH_TEST);
+            } else {
+                gl.disable(glow::DEPTH_TEST);
+            }
 
             match self.blend_mode {
                 BlendMode::Disabled => {
@@ -231,5 +240,11 @@ impl Drop for Material {
         if self.program.is_some() {
             log::warn!("Material dropped without calling destroy()");
         }
+    }
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Material::new(VERTEX_SHADER, FRAGMENT_SHADER)
     }
 }
