@@ -24,7 +24,7 @@ use crate::core::app_controller::AppController;
 use crate::core::app_controller::Theme;
 use crate::core::instancer::Instancer;
 use crate::core::layer_proxy::LayerProxy;
-use crate::core::loader::load_gds_into_world;
+use crate::core::loader::load_world;
 use crate::core::root_finder::RootFinder;
 use crate::graphics::renderer::Renderer;
 use crate::rsutils::resize_observer::ResizeObserver;
@@ -307,7 +307,7 @@ impl Component for ViewerPage {
                 spawn_local(async move {
                     print_and_yield(&link, "Parsing GDS").await;
 
-                    let mut progress_stream = load_gds_into_world(&content, World::new()).await;
+                    let mut progress_stream = load_world(&content).await;
 
                     print_and_yield(&link, "Loading GDS").await;
 

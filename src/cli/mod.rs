@@ -4,12 +4,11 @@ pub mod generate_svg;
 use crate::cli::app_window::spawn_window;
 use crate::cli::generate_svg::generate_svg;
 use crate::core::instancer::Instancer;
-use crate::core::loader::load_gds_into_world;
+use crate::core::loader::load_world;
 use crate::core::root_finder::RootFinder;
 
 use anyhow::anyhow;
 use anyhow::Result;
-use bevy_ecs::world::World;
 use clap::Parser;
 use futures::StreamExt;
 use std::fs;
@@ -70,7 +69,7 @@ pub fn run_cli() -> Result<()> {
 
     let mut world = rt.block_on(async {
         let gds_data = file_content.clone();
-        let progress_stream = load_gds_into_world(&gds_data, World::new()).await;
+        let progress_stream = load_world(&gds_data).await;
         let mut progress_stream = std::pin::pin!(progress_stream);
         let mut world = None;
         while let Some(mut progress) = progress_stream.next().await {
