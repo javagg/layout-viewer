@@ -5,7 +5,6 @@ use crate::core::components::CellReference;
 use crate::core::components::Layer;
 use crate::core::components::LayerMaterial;
 use crate::core::components::LayerMesh;
-use crate::core::components::RootCellInstance;
 use crate::core::components::ShapeDefinition;
 use crate::core::components::ShapeType;
 use crate::core::path_outline::create_path_outline;
@@ -17,7 +16,7 @@ use crate::graphics::mesh::Mesh;
 use crate::graphics::vectors::*;
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::SystemState;
+use bevy_ecs::query::QueryState;
 use bevy_ecs::world::World;
 use gds21::GdsBoundary;
 use gds21::GdsLibrary;
@@ -94,6 +93,8 @@ struct WorldGenerator {
     total_element_count: usize,
     processed_element_count: usize,
     status: String,
+    layer_query: QueryState<(Entity, &'static Layer)>,
+    layer_material_query: QueryState<(Entity, &'static LayerMaterial)>,
 }
 
 impl LoaderState {
@@ -153,6 +154,9 @@ impl WorldGenerator {
         name_to_cell_def: NameTable,
         total_element_count: usize,
     ) -> Box<Self> {
+        let layer_query = QueryState::new(&mut world);
+        let layer_material_query = QueryState::new(&mut world);
+
         Box::new(WorldGenerator {
             world,
             library,
@@ -162,6 +166,8 @@ impl WorldGenerator {
             total_element_count,
             processed_element_count: 0,
             status: String::new(),
+            layer_query,
+            layer_material_query,
         })
     }
 
@@ -304,8 +310,7 @@ impl WorldGenerator {
 
     fn get_or_create_layer(&mut self, index: i16) -> Entity {
         let layer = self
-            .world
-            .query::<(Entity, &Layer)>()
+            .layer_query
             .iter(&self.world)
             .find(|(_, layer)| layer.index == index);
 
@@ -313,10 +318,7 @@ impl WorldGenerator {
             return entity;
         }
 
-        let layer_material_result = self
-            .world
-            .query::<(Entity, &LayerMaterial)>()
-            .get_single(&self.world);
+        let layer_material_result = self.layer_material_query.get_single(&self.world);
 
         let layer_material = match layer_material_result {
             Err(_) => self.world.spawn(LayerMaterial).id(),

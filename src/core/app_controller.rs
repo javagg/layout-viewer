@@ -24,14 +24,42 @@ use crate::graphics::renderer::Renderer;
 use crate::graphics::vectors::*;
 use crate::graphics::viewport::Viewport;
 
+/// Bundles all query objects used by the AppController
+struct QueryBundle {
+    mut_layers: QueryState<(Entity, &'static mut Layer)>,
+    layers: QueryState<&'static Layer>,
+    shapes: QueryState<(Entity, &'static ShapeInstance)>,
+    geometries: QueryState<&'static mut Geometry>,
+    materials: QueryState<&'static mut Material>,
+    layer_meshes: QueryState<(&'static mut Mesh, &'static LayerMesh)>,
+    layer_material: QueryState<(&'static mut Material, &'static LayerMaterial)>,
+}
+
+impl QueryBundle {
+    fn new(world: &mut World) -> Self {
+        Self {
+            mut_layers: QueryState::new(world),
+            layers: QueryState::new(world),
+            shapes: QueryState::new(world),
+            geometries: QueryState::new(world),
+            materials: QueryState::new(world),
+            layer_meshes: QueryState::new(world),
+            layer_material: QueryState::new(world),
+        }
+    }
+
+    fn update(&mut self, world: &mut World) {
+        *self = Self::new(world);
+    }
+}
+
 /// Encapsulates high-level application logic common to all platforms.
 pub struct AppController {
     window_size: (u32, u32),
     renderer: Renderer,
     camera: Camera,
     world: World,
-    mut_layer_query: QueryState<(Entity, &'static mut Layer)>,
-    layer_query: QueryState<&'static Layer>,
+    queries: QueryBundle,
     is_dragging: bool,
     last_mouse_pos: Option<(u32, u32)>,
     zoom_speed: f64,
@@ -55,17 +83,14 @@ impl AppController {
 
         let hover_effect = HoverEffect::new(&mut world);
 
-        let layer_query = QueryState::new(&mut world);
-
-        let mut_layer_query = QueryState::new(&mut world);
+        let queries = QueryBundle::new(&mut world);
 
         Self {
             window_size: (physical_width, physical_height),
             renderer,
             camera,
             world,
-            layer_query,
-            mut_layer_query,
+            queries,
             is_dragging: false,
             last_mouse_pos: None,
             zoom_speed: 0.05,
@@ -84,11 +109,10 @@ impl AppController {
         self.hover_effect.set_render_order(&mut world, 9999);
         self.renderer.on_new_world(&mut world);
         self.world = world;
-        self.layer_query = QueryState::new(&mut self.world);
-        self.mut_layer_query = QueryState::new(&mut self.world);
+        self.queries.update(&mut self.world);
 
         let mut world_bounds = BoundingBox::new();
-        for layer in self.layer_query.iter_mut(&mut self.world) {
+        for layer in self.queries.layers.iter_mut(&mut self.world) {
             world_bounds.encompass(&layer.world_bounds);
         }
 
@@ -100,8 +124,7 @@ impl AppController {
         self.render();
 
         let mut rtree_items = Vec::new();
-        let mut shape_query = self.world.query::<(Entity, &ShapeInstance)>();
-        for (entity, shape_instance) in shape_query.iter(&self.world) {
+        for (entity, shape_instance) in self.queries.shapes.iter(&self.world) {
             rtree_items.push(RTreeItem {
                 shape_instance: entity,
                 aabb: shape_instance.world_polygon.envelope(),
@@ -256,13 +279,11 @@ impl AppController {
     }
 
     pub fn destroy(&mut self) {
-        let mut geo_query = self.world.query::<&mut Geometry>();
-        for mut geo in geo_query.iter_mut(&mut self.world) {
+        for mut geo in self.queries.geometries.iter_mut(&mut self.world) {
             geo.destroy(self.renderer.gl());
         }
 
-        let mut mat_query = self.world.query::<&mut Material>();
-        for mut mat in mat_query.iter_mut(&mut self.world) {
+        for mut mat in self.queries.materials.iter_mut(&mut self.world) {
             mat.destroy(self.renderer.gl());
         }
 
@@ -271,19 +292,18 @@ impl AppController {
 
     pub fn apply_theme(&mut self, theme: Theme) {
         let mut count = 0;
-        for layer in self.layer_query.iter(&self.world) {
+        for layer in self.queries.layers.iter(&self.world) {
             if !layer.shape_instances.is_empty() {
                 count += 1;
             }
         }
         let alpha = 1.0 / (count as f32);
 
-        for (_, mut layer) in self.mut_layer_query.iter_mut(&mut self.world) {
+        for (_, mut layer) in self.queries.mut_layers.iter_mut(&mut self.world) {
             layer.color.w = alpha;
         }
 
-        let mut mesh_query = self.world.query::<(&mut Mesh, &LayerMesh)>();
-        for mut mesh in mesh_query.iter_mut(&mut self.world) {
+        for mut mesh in self.queries.layer_meshes.iter_mut(&mut self.world) {
             let color = match theme {
                 Theme::Light => Vector4f::new(0.0, 0.0, 0.0, alpha),
                 Theme::Dark => Vector4f::new(1.0, 1.0, 1.0, alpha),
@@ -291,8 +311,7 @@ impl AppController {
             mesh.0.set_vec4("color", color);
         }
 
-        let mut mat_query = self.world.query::<(&mut Material, &LayerMaterial)>();
-        let mut material = mat_query.single_mut(&mut self.world).0;
+        let mut material = self.queries.layer_material.single_mut(&mut self.world).0;
         match theme {
             Theme::Light => {
                 material.set_blending(BlendMode::Additive);
@@ -307,7 +326,7 @@ impl AppController {
 
     pub fn create_layer_proxies(&mut self) -> Vec<LayerProxy> {
         let mut layer_proxies = Vec::new();
-        for (entity, layer) in self.mut_layer_query.iter(&self.world) {
+        for (entity, layer) in self.queries.mut_layers.iter(&self.world) {
             layer_proxies.push(LayerProxy::from_layer(entity, layer));
         }
         layer_proxies
@@ -315,7 +334,8 @@ impl AppController {
 
     pub fn update_layer(&mut self, layer_proxy: LayerProxy) {
         let mut layer = self
-            .mut_layer_query
+            .queries
+            .mut_layers
             .get_mut(&mut self.world, layer_proxy.entity)
             .unwrap()
             .1;
