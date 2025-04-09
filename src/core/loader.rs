@@ -17,11 +17,8 @@ use crate::graphics::mesh::Mesh;
 use crate::graphics::vectors::*;
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::Query;
 use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
-use futures::stream::{self};
-use futures::Stream;
 use gds21::GdsBoundary;
 use gds21::GdsLibrary;
 use gds21::GdsPath;
@@ -32,35 +29,64 @@ use geo::Coord;
 use geo::LineString;
 
 type NameTable = BTreeMap<String, Entity>;
-type QueryBundle = SystemState<(Query<'static, 'static, (Entity, &'static RootCellInstance)>,)>;
 
 /// Controls the maximum number of GDS elements to process before yielding.
 /// Higher numbers might speed up loading time, but could reduce interactivity
 /// and frequency of status updates in the UI.
-const CHUNK_SIZE: usize = 100;
+const CHUNK_SIZE: usize = 300;
 
 pub struct Progress {
-    pub phase: String,
-    pub percent: f32,
-    pub world: Option<World>,
+    phase: String,
+    percent: f32,
+    world: Option<World>,
 }
 
-pub async fn load_world(gds_content: &[u8]) -> impl Stream<Item = Progress> {
-    let state = LoaderState::ParsingFile(gds_content.to_vec());
-    stream::unfold(state, |state| async move { state.next() })
+pub struct Loader {
+    state: Option<LoaderState>,
+}
+
+impl Loader {
+    pub fn new(gds_content: &[u8]) -> Self {
+        let state = LoaderState::ParsingFile(gds_content.to_vec());
+        Self { state: Some(state) }
+    }
+}
+
+impl Iterator for Loader {
+    type Item = Progress;
+
+    fn next(&mut self) -> Option<Progress> {
+        let state = self.state.take()?;
+        let (progress, state) = state.next()?;
+        self.state = Some(state);
+        Some(progress)
+    }
+}
+
+impl Progress {
+    pub fn status_message(&self) -> String {
+        if self.percent > 0.0 {
+            format!("{} {:.0}%", self.phase, self.percent)
+        } else {
+            self.phase.clone()
+        }
+    }
+
+    pub fn take_world(&mut self) -> Option<World> {
+        self.world.take()
+    }
 }
 
 enum LoaderState {
     ParsingFile(Vec<u8>),
     GatheringNames(GdsLibrary),
     GeneratingWorld(Box<WorldGenerator>),
-    WorldHandoff(Box<World>),
+    YieldingWorld(Box<World>),
     Done,
 }
 
 struct WorldGenerator {
     world: World,
-    queries: QueryBundle,
     library: GdsLibrary,
     name_to_cell_def: NameTable,
     struct_index: usize,
@@ -99,18 +125,18 @@ impl LoaderState {
                     generator.process_element();
                     if generator.is_done() {
                         let world = Box::new(generator.world);
-                        return next_state("Done", LoaderState::WorldHandoff(world));
+                        return next_state("Done", LoaderState::YieldingWorld(world));
                     }
                 }
                 let progress = generator.progress();
                 Some((progress, LoaderState::GeneratingWorld(generator)))
             }
-            LoaderState::WorldHandoff(world) => {
+            LoaderState::YieldingWorld(world) => {
                 // Move the world from LoaderState to Progress so that the
                 // caller can take ownership of it.
                 let progress = Progress {
                     phase: "Done".to_string(),
-                    percent: 1.0,
+                    percent: 100.0,
                     world: Some(*world),
                 };
                 Some((progress, LoaderState::Done))
@@ -127,10 +153,8 @@ impl WorldGenerator {
         name_to_cell_def: NameTable,
         total_element_count: usize,
     ) -> Box<Self> {
-        let queries = SystemState::new(&mut world);
         Box::new(WorldGenerator {
             world,
-            queries,
             library,
             name_to_cell_def,
             struct_index: 0,
@@ -144,7 +168,7 @@ impl WorldGenerator {
     fn progress(&self) -> Progress {
         Progress {
             phase: self.status.clone(),
-            percent: self.fraction(),
+            percent: self.fraction() * 100.0,
             world: None,
         }
     }

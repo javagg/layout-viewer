@@ -4,13 +4,12 @@ pub mod generate_svg;
 use crate::cli::app_window::spawn_window;
 use crate::cli::generate_svg::generate_svg;
 use crate::core::instancer::Instancer;
-use crate::core::loader::load_world;
+use crate::core::loader::Loader;
 use crate::core::root_finder::RootFinder;
 
 use anyhow::anyhow;
 use anyhow::Result;
 use clap::Parser;
-use futures::StreamExt;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -68,27 +67,26 @@ pub fn run_cli() -> Result<()> {
         .build()?;
 
     let mut world = rt.block_on(async {
-        let gds_data = file_content.clone();
-        let progress_stream = load_world(&gds_data).await;
-        let mut progress_stream = std::pin::pin!(progress_stream);
+        let loader = Loader::new(&file_content);
         let mut world = None;
-        while let Some(mut progress) = progress_stream.next().await {
+        for mut progress in loader {
             print!(".");
-            world = progress.world.take();
+            world = progress.take_world();
         }
+        let mut world = world.expect("World was not yielded");
         log::info!("Done with loading.");
 
-        let mut root_finder = RootFinder::new(world.as_mut().unwrap());
-        let roots = root_finder.find_roots(world.as_ref().unwrap());
+        let mut root_finder = RootFinder::new(&mut world);
+        let roots = root_finder.find_roots(&world);
 
         log::info!("Found {} roots.", roots.len());
 
-        let mut instancer = Instancer::new(world.as_mut().unwrap());
-        instancer.select_root(world.as_mut().unwrap(), roots[0]);
+        let mut instancer = Instancer::new(&mut world);
+        instancer.select_root(&mut world, roots[0]);
 
         log::info!("Done with instantiation.");
 
-        world.unwrap()
+        world
     });
 
     // Generate and save SVG if output path is provided

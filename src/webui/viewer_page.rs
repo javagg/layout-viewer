@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use bevy_ecs::world::World;
 use futures::StreamExt;
 use gloo_timers::future::TimeoutFuture;
@@ -24,7 +26,7 @@ use crate::core::app_controller::AppController;
 use crate::core::app_controller::Theme;
 use crate::core::instancer::Instancer;
 use crate::core::layer_proxy::LayerProxy;
-use crate::core::loader::load_world;
+use crate::core::loader::Loader;
 use crate::core::root_finder::RootFinder;
 use crate::graphics::renderer::Renderer;
 use crate::rsutils::resize_observer::ResizeObserver;
@@ -305,20 +307,13 @@ impl Component for ViewerPage {
             }
             ViewerMsg::SpawnLoader(content) => {
                 spawn_local(async move {
-                    print_and_yield(&link, "Parsing GDS").await;
-
-                    let mut progress_stream = load_world(&content).await;
-
-                    print_and_yield(&link, "Loading GDS").await;
-
-                    let mut progress_stream = std::pin::pin!(progress_stream);
+                    let loader = Loader::new(&content);
                     let mut world = None;
-                    while let Some(mut progress) = progress_stream.next().await {
-                        let message = format!("{} {:.0}%", progress.phase, progress.percent);
-                        print_and_yield(&link, &message).await;
-                        world = progress.world.take();
+                    for mut progress in loader {
+                        print_and_yield(&link, &progress.status_message()).await;
+                        world = progress.take_world();
                     }
-                    let world = world.unwrap();
+                    let world = world.expect("World not found");
                     link.send_message(ViewerMsg::SpawnInstancer(Box::new(world)));
                 });
                 true
