@@ -435,3 +435,13 @@ body {
   border: none;
   border-radius: 4px;
 }
+
+@media (max-width: 768px) {
+  .viewer-container {
+    width: 100vw;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
