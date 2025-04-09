@@ -61,7 +61,6 @@ pub fn run_cli() -> Result<()> {
     // Read and process the GDSII file
     let file_content = fs::read(&args.input)?;
 
-    //// BEGIN NEW ECS STUFF
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;

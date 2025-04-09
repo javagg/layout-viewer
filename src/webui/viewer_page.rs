@@ -9,7 +9,7 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::window;
 use web_sys::HtmlCanvasElement;
-use web_sys::MouseEvent;
+use web_sys::PointerEvent;
 use web_sys::Request;
 use web_sys::RequestInit;
 use web_sys::Response;
@@ -40,11 +40,11 @@ pub struct ViewerProps {
 }
 
 pub enum ViewerMsg {
-    MousePress(u32, u32),
-    MouseRelease,
-    MouseMove(u32, u32),
-    MouseWheel(u32, u32, f64),
-    MouseLeave,
+    PointerDown(u32, u32),
+    PointerUp,
+    PointerMove(u32, u32),
+    PointerLeave,
+    Wheel(u32, u32, f64),
     DoneFetching(Vec<u8>),
     SpawnLoader(Vec<u8>),
     SpawnInstancer(Box<World>),
@@ -116,27 +116,35 @@ impl Component for ViewerPage {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let onmousedown = ctx.link().callback(|e: MouseEvent| {
+        let onpointerdown = ctx.link().callback(|e: PointerEvent| {
+            e.prevent_default();
             let x = e.offset_x() as u32;
             let y = e.offset_y() as u32;
             let scale = window().unwrap().device_pixel_ratio();
             let x = (x as f64) * scale;
             let y = (y as f64) * scale;
-            ViewerMsg::MousePress(x as u32, y as u32)
+            ViewerMsg::PointerDown(x as u32, y as u32)
         });
 
-        let onmouseup = ctx.link().callback(|_| ViewerMsg::MouseRelease);
+        let onpointerup = ctx.link().callback(|e: PointerEvent| {
+            e.prevent_default();
+            ViewerMsg::PointerUp
+        });
 
-        let onmousemove = ctx.link().callback(|e: MouseEvent| {
+        let onpointermove = ctx.link().callback(|e: PointerEvent| {
+            e.prevent_default();
             let x = e.offset_x() as u32;
             let y = e.offset_y() as u32;
             let scale = window().unwrap().device_pixel_ratio();
             let x = (x as f64) * scale;
             let y = (y as f64) * scale;
-            ViewerMsg::MouseMove(x as u32, y as u32)
+            ViewerMsg::PointerMove(x as u32, y as u32)
         });
 
-        let onmouseleave = ctx.link().callback(|_| ViewerMsg::MouseLeave);
+        let onpointerleave = ctx.link().callback(|e: PointerEvent| {
+            e.prevent_default();
+            ViewerMsg::PointerLeave
+        });
 
         let onwheel = ctx.link().callback(|e: WheelEvent| {
             e.prevent_default();
@@ -145,7 +153,7 @@ impl Component for ViewerPage {
             let scale = window().unwrap().device_pixel_ratio();
             let x = (x as f64) * scale;
             let y = (y as f64) * scale;
-            ViewerMsg::MouseWheel(x as u32, y as u32, e.delta_y())
+            ViewerMsg::Wheel(x as u32, y as u32, e.delta_y())
         });
 
         let on_remove_toast = ctx.link().callback(ViewerMsg::RemoveToast);
@@ -158,12 +166,12 @@ impl Component for ViewerPage {
                     <canvas
                         class="viewer-canvas"
                         ref={self.canvas_ref.clone()}
-                        onmousedown={onmousedown}
-                        onmouseup={onmouseup}
-                        onmousemove={onmousemove}
-                        onmouseleave={onmouseleave}
+                        onpointerdown={onpointerdown}
+                        onpointerup={onpointerup}
+                        onpointermove={onpointermove}
+                        onpointerleave={onpointerleave}
                         onwheel={onwheel}
-                        style={"background-color: none;"}
+                        style={"background-color: none; touch-action: none;"}
                     />
                     <div class="floating-buttons">
                         <Link<Route> to={Route::Home} classes="floating-button">
@@ -278,24 +286,24 @@ impl Component for ViewerPage {
                 closure.forget();
                 false
             }
-            ViewerMsg::MousePress(x, y) => {
+            ViewerMsg::PointerDown(x, y) => {
                 controller.handle_mouse_press(x, y);
                 false
             }
-            ViewerMsg::MouseRelease => {
+            ViewerMsg::PointerUp => {
                 controller.handle_mouse_release();
                 false
             }
-            ViewerMsg::MouseMove(x, y) => {
+            ViewerMsg::PointerMove(x, y) => {
                 controller.handle_mouse_move(x, y);
                 false
             }
-            ViewerMsg::MouseWheel(x, y, delta) => {
-                controller.handle_mouse_wheel(x, y, -delta);
+            ViewerMsg::PointerLeave => {
+                controller.handle_mouse_leave();
                 false
             }
-            ViewerMsg::MouseLeave => {
-                controller.handle_mouse_leave();
+            ViewerMsg::Wheel(x, y, delta) => {
+                controller.handle_mouse_wheel(x, y, -delta);
                 false
             }
             ViewerMsg::DoneFetching(content) => {
