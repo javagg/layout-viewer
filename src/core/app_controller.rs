@@ -24,35 +24,6 @@ use crate::graphics::renderer::Renderer;
 use crate::graphics::vectors::*;
 use crate::graphics::viewport::Viewport;
 
-/// Bundles all query objects used by the AppController
-struct QueryBundle {
-    mut_layers: QueryState<(Entity, &'static mut Layer)>,
-    layers: QueryState<&'static Layer>,
-    shapes: QueryState<(Entity, &'static ShapeInstance)>,
-    geometries: QueryState<&'static mut Geometry>,
-    materials: QueryState<&'static mut Material>,
-    layer_meshes: QueryState<(&'static mut Mesh, &'static LayerMesh)>,
-    layer_material: QueryState<(&'static mut Material, &'static LayerMaterial)>,
-}
-
-impl QueryBundle {
-    fn new(world: &mut World) -> Self {
-        Self {
-            mut_layers: QueryState::new(world),
-            layers: QueryState::new(world),
-            shapes: QueryState::new(world),
-            geometries: QueryState::new(world),
-            materials: QueryState::new(world),
-            layer_meshes: QueryState::new(world),
-            layer_material: QueryState::new(world),
-        }
-    }
-
-    fn update(&mut self, world: &mut World) {
-        *self = Self::new(world);
-    }
-}
-
 /// Encapsulates high-level application logic common to all platforms.
 pub struct AppController {
     window_size: (u32, u32),
@@ -396,5 +367,34 @@ impl AppController {
 impl Drop for AppController {
     fn drop(&mut self) {
         self.destroy();
+    }
+}
+
+/// Bundles all query objects used by the AppController
+struct QueryBundle {
+    mut_layers: QueryState<(Entity, &'static mut Layer)>,
+    layers: QueryState<&'static Layer>,
+    shapes: QueryState<(Entity, &'static ShapeInstance)>,
+    geometries: QueryState<&'static mut Geometry>,
+    materials: QueryState<&'static mut Material>,
+    layer_meshes: QueryState<(&'static mut Mesh, &'static LayerMesh)>,
+    layer_material: QueryState<(&'static mut Material, &'static LayerMaterial)>,
+}
+
+impl QueryBundle {
+    fn new(world: &mut World) -> Self {
+        Self {
+            mut_layers: QueryState::new(world),
+            layers: QueryState::new(world),
+            shapes: QueryState::new(world),
+            geometries: QueryState::new(world),
+            materials: QueryState::new(world),
+            layer_meshes: QueryState::new(world),
+            layer_material: QueryState::new(world),
+        }
+    }
+
+    fn update(&mut self, world: &mut World) {
+        *self = Self::new(world);
     }
 }

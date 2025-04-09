@@ -348,6 +348,8 @@ impl Component for ViewerPage {
                 controller.set_world(*world);
                 self.enabled = true;
 
+                self.toast_manager.show("Zoom and pan like a map");
+
                 controller.apply_theme(if self.is_dark_theme {
                     Theme::Dark
                 } else {

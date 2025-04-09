@@ -40,6 +40,13 @@ pub struct Progress {
     world: Option<World>,
 }
 
+/// Reads a GDS file, creates a World, and populates it with definition
+/// entities.
+///
+/// Has an iterator interface to allow progress reporting and
+/// periodic yielding to the UI.
+///
+/// Does not create instance entities; for that see `Instancer`.
 pub struct Loader {
     state: Option<LoaderState>,
 }
@@ -82,19 +89,6 @@ enum LoaderState {
     GeneratingWorld(Box<WorldGenerator>),
     YieldingWorld(Box<World>),
     Done,
-}
-
-struct WorldGenerator {
-    world: World,
-    library: GdsLibrary,
-    name_to_cell_def: NameTable,
-    struct_index: usize,
-    element_index: usize,
-    total_element_count: usize,
-    processed_element_count: usize,
-    status: String,
-    layer_query: QueryState<(Entity, &'static Layer)>,
-    layer_material_query: QueryState<(Entity, &'static LayerMaterial)>,
 }
 
 impl LoaderState {
@@ -145,6 +139,19 @@ impl LoaderState {
             LoaderState::Done => None,
         }
     }
+}
+
+struct WorldGenerator {
+    world: World,
+    library: GdsLibrary,
+    name_to_cell_def: NameTable,
+    struct_index: usize,
+    element_index: usize,
+    total_element_count: usize,
+    processed_element_count: usize,
+    status: String,
+    layer_query: QueryState<(Entity, &'static Layer)>,
+    layer_material_query: QueryState<(Entity, &'static LayerMaterial)>,
 }
 
 impl WorldGenerator {

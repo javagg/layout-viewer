@@ -75,10 +75,13 @@ impl ToastManager {
         }
     }
 
-    pub fn show(&mut self, message: String) {
+    pub fn show(&mut self, message: &str) {
         let id = self.next_id;
         self.next_id += 1;
-        self.toasts.push(Toast { id, message });
+        self.toasts.push(Toast {
+            id,
+            message: message.to_string(),
+        });
     }
 
     pub fn remove(&mut self, id: usize) {

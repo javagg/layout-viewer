@@ -18,6 +18,7 @@ use crate::graphics::geometry::Geometry;
 use crate::graphics::mesh::Mesh;
 use crate::graphics::vectors::*;
 
+/// Creates instance entities from definition entities.
 pub struct Instancer {
     root_query: QueryState<(Entity, Read<RootCellInstance>)>,
 }

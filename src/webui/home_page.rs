@@ -54,8 +54,7 @@ impl Component for HomePage {
                         id: "dropped-file".to_string(),
                     });
                 } else {
-                    self.toast_manager
-                        .show("Drag and drop a valid GDS file.".to_string());
+                    self.toast_manager.show("Drag and drop a valid GDS file.");
                 }
                 true
             }
