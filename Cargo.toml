@@ -26,6 +26,7 @@ log = "0.4"
 rstar = "0.12.2"
 bevy_ecs = "0.15.3"
 futures = "0.3.31"
+web-time = "1.1.0"
 
 [patch.crates-io]
 geo = { git = "https://github.com/georust/geo.git", rev = "2daf7cf" }

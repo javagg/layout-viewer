@@ -1985,6 +1985,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-logger",
  "web-sys",
+ "web-time 1.1.0",
  "winit",
  "yew",
  "yew-router",

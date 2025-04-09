@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::core::components::CellDefinition;
 use crate::core::components::CellReference;
 use crate::core::components::Layer;
@@ -14,6 +12,7 @@ use crate::graphics::bounds::BoundingBox;
 use crate::graphics::geometry::Geometry;
 use crate::graphics::mesh::Mesh;
 use crate::graphics::vectors::*;
+use std::collections::BTreeMap;
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::QueryState;
@@ -26,13 +25,11 @@ use gds21::GdsStructRef;
 use geo::AffineTransform;
 use geo::Coord;
 use geo::LineString;
+use web_time::Instant;
 
 type NameTable = BTreeMap<String, Entity>;
 
-/// Controls the maximum number of GDS elements to process before yielding.
-/// Higher numbers might speed up loading time, but could reduce interactivity
-/// and frequency of status updates in the UI.
-const CHUNK_SIZE: usize = 300;
+const BUDGET_MS: u128 = 15;
 
 pub struct Progress {
     phase: String,
@@ -116,12 +113,20 @@ impl LoaderState {
                 next_state("Generating world", LoaderState::GeneratingWorld(generator))
             }
             LoaderState::GeneratingWorld(mut generator) => {
-                for _ in 0..CHUNK_SIZE {
+                let start = Instant::now();
+                for _ in 0..generator.chunk_size {
                     generator.process_element();
                     if generator.is_done() {
                         let world = Box::new(generator.world);
                         return next_state("Done", LoaderState::YieldingWorld(world));
                     }
+                }
+                let end = Instant::now();
+                let duration = end - start;
+                if duration.as_millis() > BUDGET_MS {
+                    generator.chunk_size = std::cmp::max(generator.chunk_size - 1, 1);
+                } else {
+                    generator.chunk_size += 1;
                 }
                 let progress = generator.progress();
                 Some((progress, LoaderState::GeneratingWorld(generator)))
@@ -152,6 +157,11 @@ struct WorldGenerator {
     status: String,
     layer_query: QueryState<(Entity, &'static Layer)>,
     layer_material_query: QueryState<(Entity, &'static LayerMaterial)>,
+
+    /// Controls the maximum number of GDS elements to process before yielding.
+    /// Higher numbers might speed up loading time, but could reduce interactivity
+    /// and frequency of status updates in the UI.
+    chunk_size: usize,
 }
 
 impl WorldGenerator {
@@ -175,6 +185,7 @@ impl WorldGenerator {
             status: String::new(),
             layer_query,
             layer_material_query,
+            chunk_size: 300,
         })
     }
 
