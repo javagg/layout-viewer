@@ -196,7 +196,30 @@ impl AppController {
         self.render();
     }
 
+    pub fn handle_pinch_zoom(&mut self, center_x: f64, center_y: f64, scale_delta: f64) {
+        // Convert screen coordinates to world space before zoom
+        let (world_x, world_y) = self.screen_to_world(center_x as u32, center_y as u32);
+
+        // Calculate zoom factor (scale_delta > 1.0 = zoom in, < 1.0 = zoom out)
+        let zoom_factor = scale_delta;
+
+        // Update camera size (zoom)
+        self.camera.width *= zoom_factor;
+        self.camera.height *= zoom_factor;
+
+        // Convert the same screen coordinates to world space after zoom
+        let (new_world_x, new_world_y) = self.screen_to_world(center_x as u32, center_y as u32);
+
+        // Adjust camera position to keep pinch center stable
+        self.camera.position.x += world_x - new_world_x;
+        self.camera.position.y += world_y - new_world_y;
+
+        self.render();
+    }
+
     pub fn handle_mouse_leave(&mut self) {
+        self.is_dragging = false;
+        
         let hovered_entity = self
             .world
             .query::<(Entity, &Hovered)>()

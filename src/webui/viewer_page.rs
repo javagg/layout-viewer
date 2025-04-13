@@ -1,9 +1,7 @@
 use bevy_ecs::world::World;
 use gloo_timers::future::TimeoutFuture;
-use js_sys::Promise;
 use serde::Serialize;
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
@@ -13,6 +11,8 @@ use web_sys::PointerEvent;
 use web_sys::Request;
 use web_sys::RequestInit;
 use web_sys::Response;
+use web_sys::Touch;
+use web_sys::TouchEvent;
 use web_sys::WebGl2RenderingContext;
 use web_sys::WheelEvent;
 use yew::html::Scope;
@@ -40,11 +40,6 @@ pub struct ViewerProps {
 }
 
 pub enum ViewerMsg {
-    PointerDown(u32, u32),
-    PointerUp,
-    PointerMove(u32, u32),
-    PointerLeave,
-    Wheel(u32, u32, f64),
     DoneFetching(Vec<u8>),
     SpawnLoader(Vec<u8>),
     SpawnInstancer(Box<World>),
@@ -56,6 +51,16 @@ pub enum ViewerMsg {
     RemoveToast(usize),
     UpdateLayer(LayerProxy),
     ToggleTheme,
+    PointerDown(PointerEvent),
+    PointerMove(PointerEvent),
+    PointerUp,
+    PointerLeave,
+    Wheel(WheelEvent),
+    SingleTouchStart(Touch),
+    DoubleTouchStart(Touch, Touch),
+    SingleTouchMove(Touch),
+    DoubleTouchMove(Touch, Touch),
+    TouchEnd,
 }
 
 pub struct ViewerPage {
@@ -65,7 +70,12 @@ pub struct ViewerPage {
     layer_proxies: Vec<LayerProxy>,
     is_dark_theme: bool,
     status: String,
+
+    /// The page is disabled until the GDS file is loaded
     enabled: bool,
+
+    /// This is None if at least two touches are not active.
+    pinch_zoom_length: Option<f64>,
 }
 
 impl Component for ViewerPage {
@@ -108,6 +118,7 @@ impl Component for ViewerPage {
             is_dark_theme,
             enabled: false,
             status: "Fetching GDS".to_string(),
+            pinch_zoom_length: None,
         }
     }
 
@@ -118,12 +129,12 @@ impl Component for ViewerPage {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let onpointerdown = ctx.link().callback(|e: PointerEvent| {
             e.prevent_default();
-            let x = e.offset_x() as u32;
-            let y = e.offset_y() as u32;
-            let scale = window().unwrap().device_pixel_ratio();
-            let x = (x as f64) * scale;
-            let y = (y as f64) * scale;
-            ViewerMsg::PointerDown(x as u32, y as u32)
+            ViewerMsg::PointerDown(e)
+        });
+
+        let onpointermove = ctx.link().callback(|e: PointerEvent| {
+            e.prevent_default();
+            ViewerMsg::PointerMove(e)
         });
 
         let onpointerup = ctx.link().callback(|e: PointerEvent| {
@@ -131,29 +142,43 @@ impl Component for ViewerPage {
             ViewerMsg::PointerUp
         });
 
-        let onpointermove = ctx.link().callback(|e: PointerEvent| {
-            e.prevent_default();
-            let x = e.offset_x() as u32;
-            let y = e.offset_y() as u32;
-            let scale = window().unwrap().device_pixel_ratio();
-            let x = (x as f64) * scale;
-            let y = (y as f64) * scale;
-            ViewerMsg::PointerMove(x as u32, y as u32)
-        });
-
         let onpointerleave = ctx.link().callback(|e: PointerEvent| {
             e.prevent_default();
             ViewerMsg::PointerLeave
         });
 
+        let ontouchstart = ctx.link().callback(|e: TouchEvent| {
+            e.prevent_default();
+            if e.touches().length() != 2 {
+                let touch = e.touches().get(0).unwrap();
+                ViewerMsg::SingleTouchStart(touch)
+            } else {
+                let touch1 = e.touches().get(0).unwrap();
+                let touch2 = e.touches().get(1).unwrap();
+                ViewerMsg::DoubleTouchStart(touch1, touch2)
+            }
+        });
+
+        let ontouchend = ctx.link().callback(|e: TouchEvent| {
+            e.prevent_default();
+            ViewerMsg::TouchEnd
+        });
+
+        let ontouchmove = ctx.link().callback(|e: TouchEvent| {
+            e.prevent_default();
+            if e.touches().length() != 2 {
+                let touch = e.touches().get(0).unwrap();
+                ViewerMsg::SingleTouchMove(touch)
+            } else {
+                let touch1 = e.touches().get(0).unwrap();
+                let touch2 = e.touches().get(1).unwrap();
+                ViewerMsg::DoubleTouchMove(touch1, touch2)
+            }
+        });
+
         let onwheel = ctx.link().callback(|e: WheelEvent| {
             e.prevent_default();
-            let x = e.offset_x() as u32;
-            let y = e.offset_y() as u32;
-            let scale = window().unwrap().device_pixel_ratio();
-            let x = (x as f64) * scale;
-            let y = (y as f64) * scale;
-            ViewerMsg::Wheel(x as u32, y as u32, e.delta_y())
+            ViewerMsg::Wheel(e)
         });
 
         let on_remove_toast = ctx.link().callback(ViewerMsg::RemoveToast);
@@ -170,6 +195,9 @@ impl Component for ViewerPage {
                         onpointerup={onpointerup}
                         onpointermove={onpointermove}
                         onpointerleave={onpointerleave}
+                        ontouchstart={ontouchstart}
+                        ontouchend={ontouchend}
+                        ontouchmove={ontouchmove}
                         onwheel={onwheel}
                         style={"background-color: none; touch-action: none;"}
                     />
@@ -286,26 +314,6 @@ impl Component for ViewerPage {
                 closure.forget();
                 false
             }
-            ViewerMsg::PointerDown(x, y) => {
-                controller.handle_mouse_press(x, y);
-                false
-            }
-            ViewerMsg::PointerUp => {
-                controller.handle_mouse_release();
-                false
-            }
-            ViewerMsg::PointerMove(x, y) => {
-                controller.handle_mouse_move(x, y);
-                false
-            }
-            ViewerMsg::PointerLeave => {
-                controller.handle_mouse_leave();
-                false
-            }
-            ViewerMsg::Wheel(x, y, delta) => {
-                controller.handle_mouse_wheel(x, y, -delta);
-                false
-            }
             ViewerMsg::DoneFetching(content) => {
                 link.send_message(ViewerMsg::SpawnLoader(content));
                 true
@@ -398,6 +406,81 @@ impl Component for ViewerPage {
                 }
                 true
             }
+            ViewerMsg::PointerDown(pointer) => {
+                let x = pointer.client_x() as u32;
+                let y = pointer.client_y() as u32;
+                let scale = window().unwrap().device_pixel_ratio();
+                let x = (x as f64) * scale;
+                let y = (y as f64) * scale;
+                controller.handle_mouse_press(x as u32, y as u32);
+                false
+            }
+            ViewerMsg::PointerMove(pointer) => {
+                let x = pointer.client_x() as u32;
+                let y = pointer.client_y() as u32;
+                let scale = window().unwrap().device_pixel_ratio();
+                let x = (x as f64) * scale;
+                let y = (y as f64) * scale;
+                controller.handle_mouse_move(x as u32, y as u32);
+                false
+            }
+            ViewerMsg::PointerUp => {
+                controller.handle_mouse_release();
+                false
+            }
+            ViewerMsg::PointerLeave => {
+                controller.handle_mouse_leave();
+                false
+            }
+            ViewerMsg::Wheel(wheel) => {
+                let x = wheel.offset_x() as u32;
+                let y = wheel.offset_y() as u32;
+                let scale = window().unwrap().device_pixel_ratio();
+                let x = (x as f64) * scale;
+                let y = (y as f64) * scale;
+                controller.handle_mouse_wheel(x as u32, y as u32, -wheel.delta_y());
+                false
+            }
+            ViewerMsg::SingleTouchStart(touch) => {
+                let x = touch.client_x() as u32;
+                let y = touch.client_y() as u32;
+                let scale = window().unwrap().device_pixel_ratio();
+                let x = (x as f64) * scale;
+                let y = (y as f64) * scale;
+                controller.handle_mouse_press(x as u32, y as u32);
+                false
+            }
+            ViewerMsg::DoubleTouchStart(touch1, touch2) => {
+                self.pinch_zoom_length = Some(compute_pinch_zoom_length(&touch1, &touch2));
+                false
+            }
+            ViewerMsg::SingleTouchMove(touch) => {
+                let x = touch.client_x() as u32;
+                let y = touch.client_y() as u32;
+                let scale = window().unwrap().device_pixel_ratio();
+                let x = (x as f64) * scale;
+                let y = (y as f64) * scale;
+                controller.handle_mouse_move(x as u32, y as u32);
+                false
+            }
+            ViewerMsg::DoubleTouchMove(touch1, touch2) => {
+                let Some(pinch_zoom_length) = self.pinch_zoom_length else {
+                    return false;
+                };
+                let new_length = compute_pinch_zoom_length(&touch1, &touch2);
+                let scale = new_length / pinch_zoom_length;
+                let center = compute_pinch_center(&touch1, &touch2);
+                controller.handle_mouse_wheel(center.0 as u32, center.1 as u32, scale);
+                false
+            }
+            ViewerMsg::TouchEnd => {
+                if self.pinch_zoom_length.is_some() {
+                    self.pinch_zoom_length = None;
+                } else {
+                    controller.handle_mouse_release();
+                }
+                false
+            }
         }
     }
 }
@@ -441,12 +524,18 @@ async fn print_and_yield(link: &Scope<ViewerPage>, status: &str) {
     TimeoutFuture::new(0).await;
 }
 
-// NOTE: This is the more modern API than TimeoutFuture, but it does not seem to
-// give enough time for the browser to re-render the DOM.
-#[allow(dead_code)]
-async fn yield_to_browser() -> Result<JsValue, JsValue> {
-    JsFuture::from(Promise::new(&mut |resolve, _| {
-        web_sys::window().unwrap().queue_microtask(&resolve);
-    }))
-    .await
+fn compute_pinch_zoom_length(touch_a: &Touch, touch_b: &Touch) -> f64 {
+    let dx = (touch_a.client_x() - touch_b.client_x()).pow(2);
+    let dy = (touch_a.client_y() - touch_b.client_y()).pow(2);
+    let distance = (dx + dy) as f64;
+    distance.sqrt()
+}
+
+fn compute_pinch_center(touch_a: &Touch, touch_b: &Touch) -> (f64, f64) {
+    let x = (touch_a.client_x() + touch_b.client_x()) as f64 / 2.0;
+    let y = (touch_a.client_y() + touch_b.client_y()) as f64 / 2.0;
+    let scale = window().unwrap().device_pixel_ratio();
+    let x = x * scale;
+    let y = y * scale;
+    (x, y)
 }
