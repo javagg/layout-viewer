@@ -110,11 +110,15 @@ impl AppController {
     }
 
     pub fn handle_mouse_press(&mut self, x: u32, y: u32) {
+        if self.pinch_state.is_some() {
+            return;
+        }
         self.is_dragging = true;
         self.last_mouse_pos = Some((x, y));
     }
 
     pub fn handle_mouse_release(&mut self) {
+        self.pinch_state = None;
         self.is_dragging = false;
         self.last_mouse_pos = None;
     }
@@ -134,16 +138,23 @@ impl AppController {
             return;
         };
 
+        let aspect = self.camera.height / self.camera.width;
+
+        // Reset the camera; use the original coordinate system for all
+        // subsequent calculations to prevent jitter.
+        self.camera.position.x = pinch_state.start_camera_position.x;
+        self.camera.position.y = pinch_state.start_camera_position.y;
+        self.camera.width = pinch_state.start_camera_width;
+        self.camera.height = self.camera.width * aspect;
+
+        // Convert current center to world space
+        let (center_x, center_y) = self.screen_to_world(center.x, center.y);
+
         // Calculate zoom factor based on the change in distance
         let zoom_factor = pinch_state.start_distance / distance;
 
         // Update camera size (zoom)
         let new_width = pinch_state.start_camera_width * zoom_factor;
-        self.camera.width = new_width;
-        self.camera.height = new_width * (self.window_size.1 as f64 / self.window_size.0 as f64);
-
-        // Convert current center to world space
-        let (center_x, center_y) = self.screen_to_world(center.x, center.y);
 
         // Adjust camera position to keep pinch center stable
         let dx = pinch_state.start_center.x - center_x;
@@ -151,6 +162,8 @@ impl AppController {
 
         self.camera.position.x = pinch_state.start_camera_position.x + dx;
         self.camera.position.y = pinch_state.start_camera_position.y + dy;
+        self.camera.width = new_width;
+        self.camera.height = new_width * aspect;
 
         self.render();
     }
@@ -160,6 +173,9 @@ impl AppController {
     }
 
     pub fn handle_mouse_move(&mut self, x: u32, y: u32) {
+        if self.pinch_state.is_some() {
+            return;
+        }
         if self.is_dragging {
             if let Some((last_x, last_y)) = self.last_mouse_pos {
                 let p1 = self.screen_to_world(x, y);
@@ -209,6 +225,9 @@ impl AppController {
     }
 
     pub fn handle_mouse_wheel(&mut self, x: u32, y: u32, delta: f64) {
+        if self.pinch_state.is_some() {
+            return;
+        }
         // Ignore very small deltas that might be touchpad bounce
         const MIN_DELTA: f64 = 0.01;
         if delta.abs() < MIN_DELTA {

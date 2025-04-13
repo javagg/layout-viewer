@@ -145,7 +145,6 @@ impl Component for ViewerPage {
         });
 
         let ontouchstart = ctx.link().callback(|e: TouchEvent| {
-            e.prevent_default();
             if e.touches().length() != 2 {
                 let touch = e.touches().get(0).unwrap();
                 ViewerMsg::SingleTouchStart(touch)
@@ -156,13 +155,9 @@ impl Component for ViewerPage {
             }
         });
 
-        let ontouchend = ctx.link().callback(|e: TouchEvent| {
-            e.prevent_default();
-            ViewerMsg::TouchEnd
-        });
+        let ontouchend = ctx.link().callback(|_| ViewerMsg::TouchEnd);
 
         let ontouchmove = ctx.link().callback(|e: TouchEvent| {
-            e.prevent_default();
             if e.touches().length() != 2 {
                 let touch = e.touches().get(0).unwrap();
                 ViewerMsg::SingleTouchMove(touch)
