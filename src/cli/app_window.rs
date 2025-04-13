@@ -26,7 +26,7 @@ use winit::window::WindowBuilder;
 const INITIAL_WINDOW_WIDTH: u32 = 800;
 const INITIAL_WINDOW_HEIGHT: u32 = 600;
 
-pub fn spawn_window(world: World) -> anyhow::Result<()> {
+pub fn spawn_window(world: World, theme: Theme) -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
     let window_builder = WindowBuilder::new()
         .with_title("Layout Viewer")
@@ -101,7 +101,7 @@ pub fn spawn_window(world: World) -> anyhow::Result<()> {
     let mut controller = AppController::new(renderer, window_size.width, window_size.height);
 
     controller.set_world(world);
-    controller.apply_theme(Theme::Dark);
+    controller.apply_theme(theme);
     controller.resize(window_size.width, window_size.height);
 
     let mut current_cursor_pos: Option<PhysicalPosition<f64>> = None;

@@ -3,6 +3,7 @@ pub mod generate_svg;
 
 use crate::cli::app_window::spawn_window;
 use crate::cli::generate_svg::generate_svg;
+use crate::core::app_controller::Theme;
 use crate::core::instancer::Instancer;
 use crate::core::loader::Loader;
 use crate::core::root_finder::RootFinder;
@@ -28,6 +29,10 @@ pub struct Args {
     /// Request OpenGL window with interactive visualization
     #[arg(long)]
     pub gl: bool,
+
+    /// Use light theme instead of dark theme
+    #[arg(long)]
+    pub light: bool,
 }
 
 fn verify_file_extension(path: &Path, expected: &str) -> Result<()> {
@@ -99,7 +104,14 @@ pub fn run_cli() -> Result<()> {
     println!();
 
     if args.gl {
-        spawn_window(world)?;
+        spawn_window(
+            world,
+            if args.light {
+                Theme::Light
+            } else {
+                Theme::Dark
+            },
+        )?;
     }
 
     Ok(())

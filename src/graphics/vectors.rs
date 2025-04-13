@@ -1,5 +1,7 @@
 pub type Polygon = geo::Polygon<f64>;
 
+pub type Vector2u = nalgebra::Vector2<u32>;
+
 pub type Vector2d = nalgebra::Vector2<f64>;
 pub type Point2d = nalgebra::Point2<f64>;
 pub type Point2f = nalgebra::Point2<f32>;

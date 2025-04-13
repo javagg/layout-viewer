@@ -37,15 +37,22 @@ pub struct AppController {
     needs_render: bool,
     hover_effect: HoverEffect,
     rtree: RTree<RTreeItem>,
+    pinch_state: Option<PinchState>,
 }
 
 pub enum Theme {
-    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     Light,
     Dark,
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+/// All coordinates and distances are in world space.
+struct PinchState {
+    start_center: Vector2d,
+    start_distance: f64,
+    start_camera_position: Point3d,
+    start_camera_width: f64,
+}
+
 impl AppController {
     pub fn new(renderer: Renderer, physical_width: u32, physical_height: u32) -> Self {
         let camera = Camera::new(Point3d::new(0.0, 0.0, 0.0), 128.0, 128.0, -1.0, 1.0);
@@ -68,6 +75,7 @@ impl AppController {
             needs_render: true,
             hover_effect,
             rtree: RTree::new(),
+            pinch_state: None,
         }
     }
 
@@ -86,9 +94,6 @@ impl AppController {
         for layer in self.queries.layers.iter_mut(&mut self.world) {
             world_bounds.encompass(&layer.world_bounds);
         }
-
-        log::info!("World bounds: {:?}", world_bounds);
-        log::info!("Window size: {:?}", self.window_size);
 
         self.camera.fit_to_bounds(self.window_size, world_bounds);
 
@@ -112,6 +117,46 @@ impl AppController {
     pub fn handle_mouse_release(&mut self) {
         self.is_dragging = false;
         self.last_mouse_pos = None;
+    }
+
+    pub fn handle_pinch_start(&mut self, distance: f64, center: Vector2u) {
+        let (center_x, center_y) = self.screen_to_world(center.x, center.y);
+        self.pinch_state = Some(PinchState {
+            start_center: Vector2d::new(center_x, center_y),
+            start_distance: distance,
+            start_camera_position: self.camera.position,
+            start_camera_width: self.camera.width,
+        });
+    }
+
+    pub fn handle_pinch_zoom(&mut self, distance: f64, center: Vector2u) {
+        let Some(pinch_state) = &self.pinch_state else {
+            return;
+        };
+
+        // Calculate zoom factor based on the change in distance
+        let zoom_factor = pinch_state.start_distance / distance;
+
+        // Update camera size (zoom)
+        let new_width = pinch_state.start_camera_width * zoom_factor;
+        self.camera.width = new_width;
+        self.camera.height = new_width * (self.window_size.1 as f64 / self.window_size.0 as f64);
+
+        // Convert current center to world space
+        let (center_x, center_y) = self.screen_to_world(center.x, center.y);
+
+        // Adjust camera position to keep pinch center stable
+        let dx = pinch_state.start_center.x - center_x;
+        let dy = pinch_state.start_center.y - center_y;
+
+        self.camera.position.x = pinch_state.start_camera_position.x + dx;
+        self.camera.position.y = pinch_state.start_camera_position.y + dy;
+
+        self.render();
+    }
+
+    pub fn handle_pinch_release(&mut self) {
+        self.pinch_state = None;
     }
 
     pub fn handle_mouse_move(&mut self, x: u32, y: u32) {
@@ -196,30 +241,9 @@ impl AppController {
         self.render();
     }
 
-    pub fn handle_pinch_zoom(&mut self, center_x: f64, center_y: f64, scale_delta: f64) {
-        // Convert screen coordinates to world space before zoom
-        let (world_x, world_y) = self.screen_to_world(center_x as u32, center_y as u32);
-
-        // Calculate zoom factor (scale_delta > 1.0 = zoom in, < 1.0 = zoom out)
-        let zoom_factor = scale_delta;
-
-        // Update camera size (zoom)
-        self.camera.width *= zoom_factor;
-        self.camera.height *= zoom_factor;
-
-        // Convert the same screen coordinates to world space after zoom
-        let (new_world_x, new_world_y) = self.screen_to_world(center_x as u32, center_y as u32);
-
-        // Adjust camera position to keep pinch center stable
-        self.camera.position.x += world_x - new_world_x;
-        self.camera.position.y += world_y - new_world_y;
-
-        self.render();
-    }
-
     pub fn handle_mouse_leave(&mut self) {
         self.is_dragging = false;
-        
+
         let hovered_entity = self
             .world
             .query::<(Entity, &Hovered)>()
@@ -291,7 +315,11 @@ impl AppController {
                 count += 1;
             }
         }
-        let alpha = 1.0 / (count as f32);
+        let mut alpha = 1.0 / (count as f32);
+
+        if matches!(theme, Theme::Light) {
+            alpha = 0.5;
+        }
 
         for (_, mut layer) in self.queries.mut_layers.iter_mut(&mut self.world) {
             layer.color.w = alpha;
@@ -306,12 +334,14 @@ impl AppController {
         }
 
         let mut material = self.queries.layer_material.single_mut(&mut self.world).0;
+        material.set_blending(BlendMode::SourceOver);
+
         match theme {
             Theme::Light => {
-                material.set_blending(BlendMode::Additive);
+                self.renderer.set_clear_color(1.0, 1.0, 1.0, 1.0);
             }
             Theme::Dark => {
-                material.set_blending(BlendMode::SourceOver);
+                self.renderer.set_clear_color(0.0, 0.0, 0.0, 1.0);
             }
         }
 

@@ -79,7 +79,6 @@ impl Renderer {
         self.viewport = viewport;
     }
 
-    #[allow(dead_code)]
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.clear_color = (r, g, b, a);
     }

@@ -26,6 +26,7 @@ use crate::core::layer_proxy::LayerProxy;
 use crate::core::loader::Loader;
 use crate::core::root_finder::RootFinder;
 use crate::graphics::renderer::Renderer;
+use crate::graphics::vectors::Vector2u;
 use crate::rsutils::resize_observer::ResizeObserver;
 use crate::webui::app::Route;
 use crate::webui::home_page::has_dropped_file;
@@ -71,11 +72,8 @@ pub struct ViewerPage {
     is_dark_theme: bool,
     status: String,
 
-    /// The page is disabled until the GDS file is loaded
+    /// The UI is read-only until the GDS file is fully loaded.
     enabled: bool,
-
-    /// This is None if at least two touches are not active.
-    pinch_zoom_length: Option<f64>,
 }
 
 impl Component for ViewerPage {
@@ -118,7 +116,6 @@ impl Component for ViewerPage {
             is_dark_theme,
             enabled: false,
             status: "Fetching GDS".to_string(),
-            pinch_zoom_length: None,
         }
     }
 
@@ -451,7 +448,9 @@ impl Component for ViewerPage {
                 false
             }
             ViewerMsg::DoubleTouchStart(touch1, touch2) => {
-                self.pinch_zoom_length = Some(compute_pinch_zoom_length(&touch1, &touch2));
+                let distance = compute_pinch_distance(&touch1, &touch2);
+                let center = compute_pinch_center(&touch1, &touch2);
+                controller.handle_pinch_start(distance, center);
                 false
             }
             ViewerMsg::SingleTouchMove(touch) => {
@@ -464,21 +463,13 @@ impl Component for ViewerPage {
                 false
             }
             ViewerMsg::DoubleTouchMove(touch1, touch2) => {
-                let Some(pinch_zoom_length) = self.pinch_zoom_length else {
-                    return false;
-                };
-                let new_length = compute_pinch_zoom_length(&touch1, &touch2);
-                let scale = new_length / pinch_zoom_length;
+                let distance = compute_pinch_distance(&touch1, &touch2);
                 let center = compute_pinch_center(&touch1, &touch2);
-                controller.handle_mouse_wheel(center.0 as u32, center.1 as u32, scale);
+                controller.handle_pinch_zoom(distance, center);
                 false
             }
             ViewerMsg::TouchEnd => {
-                if self.pinch_zoom_length.is_some() {
-                    self.pinch_zoom_length = None;
-                } else {
-                    controller.handle_mouse_release();
-                }
+                controller.handle_pinch_release();
                 false
             }
         }
@@ -524,18 +515,19 @@ async fn print_and_yield(link: &Scope<ViewerPage>, status: &str) {
     TimeoutFuture::new(0).await;
 }
 
-fn compute_pinch_zoom_length(touch_a: &Touch, touch_b: &Touch) -> f64 {
+fn compute_pinch_distance(touch_a: &Touch, touch_b: &Touch) -> f64 {
     let dx = (touch_a.client_x() - touch_b.client_x()).pow(2);
     let dy = (touch_a.client_y() - touch_b.client_y()).pow(2);
+    let scale = window().unwrap().device_pixel_ratio();
     let distance = (dx + dy) as f64;
-    distance.sqrt()
+    scale * distance.sqrt()
 }
 
-fn compute_pinch_center(touch_a: &Touch, touch_b: &Touch) -> (f64, f64) {
+fn compute_pinch_center(touch_a: &Touch, touch_b: &Touch) -> Vector2u {
     let x = (touch_a.client_x() + touch_b.client_x()) as f64 / 2.0;
     let y = (touch_a.client_y() + touch_b.client_y()) as f64 / 2.0;
     let scale = window().unwrap().device_pixel_ratio();
-    let x = x * scale;
-    let y = y * scale;
-    (x, y)
+    let x = (x * scale) as u32;
+    let y = (y * scale) as u32;
+    Vector2u::new(x, y)
 }
