@@ -101,7 +101,7 @@ pub fn spawn_window(world: World, theme: Theme) -> anyhow::Result<()> {
     let mut controller = AppController::new(renderer, window_size.width, window_size.height);
 
     controller.set_world(world);
-    controller.apply_theme(theme);
+    controller.apply_theme(&theme);
     controller.resize(window_size.width, window_size.height);
 
     let mut current_cursor_pos: Option<PhysicalPosition<f64>> = None;

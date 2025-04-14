@@ -14,6 +14,7 @@ pub enum BlendMode {
     Disabled,
     SourceOver,
     Additive,
+    Subtractive,
 }
 
 #[derive(Component)]
@@ -47,11 +48,6 @@ impl Material {
 
     pub fn set_blending(&mut self, mode: BlendMode) {
         self.blend_mode = mode;
-    }
-
-    #[allow(dead_code)]
-    pub fn blend_mode(&self) -> BlendMode {
-        self.blend_mode
     }
 
     pub(crate) fn create_program(&mut self, gl: &glow::Context) {
@@ -152,10 +148,17 @@ impl Material {
                 BlendMode::SourceOver => {
                     gl.enable(glow::BLEND);
                     gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+                    gl.blend_equation(glow::FUNC_ADD);
                 }
                 BlendMode::Additive => {
                     gl.enable(glow::BLEND);
                     gl.blend_func(glow::ONE, glow::ONE);
+                    gl.blend_equation(glow::FUNC_ADD);
+                }
+                BlendMode::Subtractive => {
+                    gl.enable(glow::BLEND);
+                    gl.blend_func(glow::ONE, glow::ONE);
+                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
                 }
             }
         }

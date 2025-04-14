@@ -4,6 +4,9 @@ use yew::prelude::*;
 
 use crate::core::layer_proxy::LayerProxy;
 
+// Disabled the color picker after introducing special blending modes.
+const ENABLE_COLOR_PICKER: bool = false;
+
 #[derive(Properties, PartialEq)]
 pub struct SidebarProps {
     pub layers: Vec<LayerProxy>,
@@ -65,15 +68,23 @@ impl Component for Sidebar {
                                 onclick={toggle_layer}
                             >
                                 <i class={format!("fas fa-eye{}", if layer.visible { "" } else { "-slash" })}></i>
-                                <div class="color-picker-container" onclick={prevent_toggle}>
-                                    <span class="layer-color" style={format!("background-color: {}", layer.color)}></span>
-                                    <input
-                                        type="color"
-                                        value={layer.color.clone()}
-                                        oninput={update_color}
-                                        class="color-picker"
-                                    />
-                                </div>
+                                {
+                                    if ENABLE_COLOR_PICKER {
+                                        html! {
+                                            <div class="color-picker-container" onclick={prevent_toggle}>
+                                                <span class="layer-color" style={format!("background-color: {}", layer.color)}></span>
+                                                <input
+                                                    type="color"
+                                                    value={layer.color.clone()}
+                                                    oninput={update_color}
+                                                    class="color-picker"
+                                                />
+                                            </div>
+                                        }
+                                    } else {
+                                        html! {}
+                                    }
+                                }
                                 <span class="layer-index">{format!("Layer {}", layer.index)}</span>
                                 <input
                                     type="range"
@@ -125,7 +136,6 @@ impl Component for Sidebar {
                 true
             }
             SidebarMsg::UpdateOpacity(entity, opacity) => {
-                log::info!("Updating opacity for layer {} to {}", entity, opacity);
                 let mut layer = get_proxy(entity);
                 layer.opacity = opacity;
                 ctx.props().update_layer.emit(layer);

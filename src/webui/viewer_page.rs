@@ -69,7 +69,7 @@ pub struct ViewerPage {
     controller: Option<AppController>,
     toast_manager: ToastManager,
     layer_proxies: Vec<LayerProxy>,
-    is_dark_theme: bool,
+    theme: Theme,
     status: String,
 
     /// The UI is read-only until the GDS file is fully loaded.
@@ -113,7 +113,11 @@ impl Component for ViewerPage {
             controller,
             toast_manager,
             layer_proxies,
-            is_dark_theme,
+            theme: if is_dark_theme {
+                Theme::Dark
+            } else {
+                Theme::Light
+            },
             enabled: false,
             status: "Fetching GDS".to_string(),
         }
@@ -176,10 +180,11 @@ impl Component for ViewerPage {
         let on_remove_toast = ctx.link().callback(ViewerMsg::RemoveToast);
         let update_layer = ctx.link().callback(ViewerMsg::UpdateLayer);
         let toggle_theme = ctx.link().callback(|_| ViewerMsg::ToggleTheme);
+        let is_dark_theme = self.theme.is_dark();
 
         html! {
             <>
-                <div class={classes!("viewer-container", if self.is_dark_theme { "dark-theme" } else { "light-theme" })}>
+                <div class={classes!("viewer-container", if is_dark_theme { "dark-theme" } else { "light-theme" })}>
                     <canvas
                         class="viewer-canvas"
                         ref={self.canvas_ref.clone()}
@@ -191,19 +196,18 @@ impl Component for ViewerPage {
                         ontouchend={ontouchend}
                         ontouchmove={ontouchmove}
                         onwheel={onwheel}
-                        style={"background-color: none; touch-action: none;"}
                     />
                     <div class="floating-buttons">
                         <Link<Route> to={Route::Home} classes="floating-button">
                             <i class="fas fa-arrow-left fa-lg"></i>
                         </Link<Route>>
                         <button class="floating-button" onclick={toggle_theme} disabled={!self.enabled}>
-                            <i class={format!("fas fa-{} fa-lg", if self.is_dark_theme { "sun" } else { "moon" })}></i>
+                            <i class={format!("fas fa-{} fa-lg", if is_dark_theme { "sun" } else { "moon" })}></i>
                         </button>
                         <span class="status-text">{self.status.clone()}</span>
                     </div>
                 </div>
-                <div class={classes!(if self.is_dark_theme { "dark-theme" } else { "light-theme" })}>
+                <div class={classes!(if is_dark_theme { "dark-theme" } else { "light-theme" })}>
                     <Sidebar layers={self.layer_proxies.clone()} update_layer={update_layer} />
                 </div>
                 <ToastContainer toasts={self.toast_manager.toasts().to_vec()} on_remove={on_remove_toast} />
@@ -238,7 +242,7 @@ impl Component for ViewerPage {
         }
 
         let options = serde_wasm_bindgen::to_value(&Options {
-            alpha: true,
+            alpha: false,
             antialias: true,
         })
         .unwrap();
@@ -257,7 +261,8 @@ impl Component for ViewerPage {
         let height = canvas.client_height() as u32;
 
         // Create controller
-        let controller = AppController::new(renderer, width, height);
+        let mut controller = AppController::new(renderer, width, height);
+        controller.apply_theme(&self.theme);
         self.controller = Some(controller);
 
         // Set up resize observer
@@ -355,11 +360,7 @@ impl Component for ViewerPage {
 
                 self.toast_manager.show("Zoom and pan like a map");
 
-                controller.apply_theme(if self.is_dark_theme {
-                    Theme::Dark
-                } else {
-                    Theme::Light
-                });
+                controller.apply_theme(&self.theme);
 
                 self.layer_proxies = controller.create_layer_proxies();
                 true
@@ -382,17 +383,17 @@ impl Component for ViewerPage {
                 true
             }
             ViewerMsg::ToggleTheme => {
-                self.is_dark_theme = !self.is_dark_theme;
-                controller.apply_theme(if self.is_dark_theme {
-                    Theme::Dark
-                } else {
-                    Theme::Light
-                });
+                self.theme = self.theme.inverse();
+                controller.apply_theme(&self.theme);
                 if let Some(window) = window() {
                     if let Some(storage) = window.local_storage().unwrap() {
                         let _ = storage.set_item(
                             "dark_theme",
-                            if self.is_dark_theme { "true" } else { "false" },
+                            if self.theme.is_dark() {
+                                "true"
+                            } else {
+                                "false"
+                            },
                         );
                     }
                 }

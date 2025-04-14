@@ -8,7 +8,6 @@ use rstar::RTreeObject;
 use crate::core::components::Hovered;
 use crate::core::components::Layer;
 use crate::core::components::LayerMaterial;
-use crate::core::components::LayerMesh;
 use crate::core::components::ShapeInstance;
 use crate::core::hover_effect::HoverEffect;
 use crate::core::hover_effect::HoverParams;
@@ -43,6 +42,18 @@ pub struct AppController {
 pub enum Theme {
     Light,
     Dark,
+}
+
+impl Theme {
+    pub fn inverse(&self) -> Self {
+        match self {
+            Self::Light => Self::Dark,
+            Self::Dark => Self::Light,
+        }
+    }
+    pub fn is_dark(&self) -> bool {
+        matches!(self, Self::Dark)
+    }
 }
 
 /// All coordinates and distances are in world space.
@@ -327,44 +338,50 @@ impl AppController {
         // TODO: despawn the entities too
     }
 
-    pub fn apply_theme(&mut self, theme: Theme) {
+    pub fn apply_theme(&mut self, theme: &Theme) {
         let mut count = 0;
         for layer in self.queries.layers.iter(&self.world) {
             if !layer.shape_instances.is_empty() {
                 count += 1;
             }
         }
-        let mut alpha = 1.0 / (count as f32);
+        let alpha = 1.0 / (count as f32);
 
-        if matches!(theme, Theme::Light) {
-            alpha = 0.5;
-        }
-
+        let mut layer_meshes = Vec::new();
         for (_, mut layer) in self.queries.mut_layers.iter_mut(&mut self.world) {
             layer.color.w = alpha;
+            layer_meshes.push((layer.mesh, layer.visible, layer.color.w));
         }
 
-        for mut mesh in self.queries.layer_meshes.iter_mut(&mut self.world) {
-            let color = match theme {
-                Theme::Light => Vector4f::new(0.0, 0.0, 0.0, alpha),
-                Theme::Dark => Vector4f::new(1.0, 1.0, 1.0, alpha),
-            };
-            mesh.0.set_vec4("color", color);
+        for (mesh, visible, alpha) in layer_meshes {
+            self.update_layer_mesh(mesh, visible, alpha);
         }
 
-        let mut material = self.queries.layer_material.single_mut(&mut self.world).0;
-        material.set_blending(BlendMode::SourceOver);
+        let material = self.queries.layer_material.get_single_mut(&mut self.world);
 
         match theme {
             Theme::Light => {
                 self.renderer.set_clear_color(1.0, 1.0, 1.0, 1.0);
+                if let Ok((mut material, _)) = material {
+                    material.set_blending(BlendMode::Subtractive);
+                }
             }
             Theme::Dark => {
                 self.renderer.set_clear_color(0.0, 0.0, 0.0, 1.0);
+                if let Ok((mut material, _)) = material {
+                    material.set_blending(BlendMode::Additive);
+                }
             }
         }
 
         self.render();
+    }
+
+    fn update_layer_mesh(&mut self, mesh: Entity, visible: bool, alpha: f32) {
+        let color = Vector4f::new(alpha, alpha, alpha, 1.0);
+        let mut mesh = self.world.get_mut::<Mesh>(mesh).unwrap();
+        mesh.set_vec4("color", color);
+        mesh.visible = visible;
     }
 
     pub fn create_layer_proxies(&mut self) -> Vec<LayerProxy> {
@@ -383,13 +400,12 @@ impl AppController {
             .unwrap()
             .1;
         layer_proxy.to_layer(&mut layer);
-        let visible = layer.visible;
-        let color = layer.color;
-        let mesh = layer.mesh;
 
-        let mut mesh = self.world.get_mut::<Mesh>(mesh).unwrap();
-        mesh.set_vec4("color", color);
-        mesh.visible = visible;
+        let mesh = layer.mesh;
+        let visible = layer.visible;
+        let alpha = layer.color.w;
+
+        self.update_layer_mesh(mesh, visible, alpha);
     }
 
     fn pick_cell(&self, x: f64, y: f64) -> Option<RTreeItem> {
@@ -449,7 +465,6 @@ struct QueryBundle {
     shapes: QueryState<(Entity, &'static ShapeInstance)>,
     geometries: QueryState<&'static mut Geometry>,
     materials: QueryState<&'static mut Material>,
-    layer_meshes: QueryState<(&'static mut Mesh, &'static LayerMesh)>,
     layer_material: QueryState<(&'static mut Material, &'static LayerMaterial)>,
 }
 
@@ -461,7 +476,6 @@ impl QueryBundle {
             shapes: QueryState::new(world),
             geometries: QueryState::new(world),
             materials: QueryState::new(world),
-            layer_meshes: QueryState::new(world),
             layer_material: QueryState::new(world),
         }
     }
