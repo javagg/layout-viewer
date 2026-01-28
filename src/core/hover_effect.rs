@@ -27,7 +27,7 @@ pub struct HoverEffect {
 impl HoverEffect {
     pub fn new(world: &mut World) -> Self {
         let mut lmq = world.query::<(Entity, &LayerMaterial, &mut Material)>();
-        let fill_material = lmq.get_single_mut(world).ok().map(|(entity, _, _)| entity);
+        let fill_material = lmq.single_mut(world).ok().map(|(entity, _, _)| entity);
 
         let fill_material = fill_material.unwrap_or_else(|| {
             let mut material = Material::default();

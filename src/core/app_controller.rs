@@ -210,7 +210,7 @@ impl AppController {
         let hovered_entity = self
             .world
             .query::<(Entity, &Hovered)>()
-            .get_single(&self.world)
+            .single(&self.world)
             .ok()
             .map(|(entity, _)| entity)
             .unwrap_or(Entity::PLACEHOLDER);
@@ -277,7 +277,7 @@ impl AppController {
         let hovered_entity = self
             .world
             .query::<(Entity, &Hovered)>()
-            .get_single(&self.world)
+            .single(&self.world)
             .ok()
             .map(|(entity, _)| entity)
             .unwrap_or(Entity::PLACEHOLDER);
@@ -357,7 +357,7 @@ impl AppController {
             self.update_layer_mesh(mesh, visible, alpha);
         }
 
-        let material = self.queries.layer_material.get_single_mut(&mut self.world);
+        let material = self.queries.layer_material.single_mut(&mut self.world);
 
         match theme {
             Theme::Light => {

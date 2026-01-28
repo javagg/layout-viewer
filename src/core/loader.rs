@@ -336,7 +336,7 @@ impl WorldGenerator {
             return entity;
         }
 
-        let layer_material_result = self.layer_material_query.get_single(&self.world);
+        let layer_material_result = self.layer_material_query.single(&self.world);
 
         let layer_material = match layer_material_result {
             Err(_) => self.world.spawn(LayerMaterial).id(),

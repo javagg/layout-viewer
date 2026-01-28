@@ -24,8 +24,7 @@ nalgebra = "0.32"
 bytemuck = "1.14"
 log = "0.4"
 rstar = "0.12.2"
-bevy_ecs = "0.15.3"
-futures = "0.3.31"
+bevy_ecs = "0.18"
 web-time = "1.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

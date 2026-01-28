@@ -37,7 +37,7 @@ impl Instancer {
             panic!("Entity does not have a CellDefinition component");
         };
 
-        let existing_root = self.root_query.get_single(world);
+        let existing_root = self.root_query.single(world);
         if existing_root.is_ok() {
             panic!("Root cell instance already exists");
         }
