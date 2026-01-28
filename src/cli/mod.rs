@@ -66,11 +66,7 @@ pub fn run_cli() -> Result<()> {
     // Read and process the GDSII file
     let file_content = fs::read(&args.input)?;
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-
-    let mut world = rt.block_on(async {
+    let mut world = pollster::block_on(async {
         let loader = Loader::new(&file_content);
         let mut world = None;
         for mut progress in loader {
