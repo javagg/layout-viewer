@@ -26,6 +26,7 @@ log = "0.4"
 rstar = "0.12.2"
 bevy_ecs = "0.18"
 web-time = "1.1.0"
+wgpu = "0.19"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2" }
@@ -69,6 +70,7 @@ raw-window-handle = "0.5"
 glutin = "0.31"
 glutin-winit = "0.4"
 pollster = "0.4"
+
 
 [profile.release]
 opt-level = 3

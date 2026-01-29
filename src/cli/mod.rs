@@ -1,8 +1,10 @@
 pub mod app_window;
 pub mod generate_svg;
+pub mod wgpu_window;
 
 use crate::cli::app_window::spawn_window;
 use crate::cli::generate_svg::generate_svg;
+use crate::cli::wgpu_window::spawn_wgpu_window;
 use crate::core::app_controller::Theme;
 use crate::core::instancer::Instancer;
 use crate::core::loader::Loader;
@@ -29,6 +31,10 @@ pub struct Args {
     /// Request OpenGL window with interactive visualization
     #[arg(long)]
     pub gl: bool,
+
+    /// Request wgpu window (skeleton backend; currently clears only)
+    #[arg(long)]
+    pub wgpu: bool,
 
     /// Use light theme instead of dark theme
     #[arg(long)]
@@ -99,15 +105,12 @@ pub fn run_cli() -> Result<()> {
 
     println!();
 
-    if args.gl {
-        spawn_window(
-            world,
-            if args.light {
-                Theme::Light
-            } else {
-                Theme::Dark
-            },
-        )?;
+    let theme = if args.light { Theme::Light } else { Theme::Dark };
+
+    if args.wgpu {
+        spawn_wgpu_window(world, theme)?;
+    } else if args.gl {
+        spawn_window(world, theme)?;
     }
 
     Ok(())
