@@ -39,6 +39,7 @@ pub struct AppController {
     pinch_state: Option<PinchState>,
 }
 
+#[derive(Clone, Copy)]
 pub enum Theme {
     Light,
     Dark,
