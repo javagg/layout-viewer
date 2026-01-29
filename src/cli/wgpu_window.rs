@@ -3,6 +3,10 @@ use anyhow::Result;
 use bevy_ecs::world::World;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use geo::Contains;
+use geo::TriangulateEarcut;
+use rstar::RTree;
+use rstar::RTreeObject;
 use std::num::NonZeroU32;
 use std::num::NonZeroU64;
 use std::time::Duration;
@@ -17,9 +21,12 @@ use winit::window::WindowBuilder;
 
 use crate::core::app_controller::Theme;
 use crate::core::components::Layer;
+use crate::core::components::ShapeInstance;
+use crate::core::rtree::RTreeItem;
 use crate::graphics::bounds::BoundingBox;
 use crate::graphics::camera::Camera;
 use crate::graphics::geometry::Geometry;
+use crate::graphics::material::Material;
 use crate::graphics::mesh::Mesh;
 
 const INITIAL_WINDOW_WIDTH: u32 = 800;
@@ -63,6 +70,96 @@ fn apply_theme_to_world(world: &mut World, theme: Theme) {
     }
 }
 
+fn build_fill_geometry(polygon: &crate::graphics::vectors::Polygon) -> (Vec<f32>, Vec<u32>) {
+    let triangles = polygon.earcut_triangles_raw();
+
+    let mut positions: Vec<f32> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    positions.reserve(3 * triangles.vertices.len().saturating_div(2));
+    indices.reserve(triangles.triangle_indices.len());
+
+    for coord in triangles.vertices.chunks(2) {
+        positions.push(coord[0] as f32);
+        positions.push(coord[1] as f32);
+        positions.push(0.0);
+    }
+    for index in triangles.triangle_indices {
+        indices.push(index as u32);
+    }
+    (positions, indices)
+}
+
+fn build_ribbon_geometry(
+    spine: &[crate::graphics::vectors::Point2d],
+    width: f64,
+    closed: bool,
+) -> (Vec<f32>, Vec<u32>) {
+    use crate::graphics::vectors::Point2d;
+    use crate::graphics::vectors::Vector2d;
+
+    if spine.len() < 2 {
+        return (Vec::new(), Vec::new());
+    }
+
+    let points = spine;
+    let mut positions: Vec<f32> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    let add_point = |positions: &mut Vec<f32>, p: Point2d| {
+        positions.extend_from_slice(&[p.x as f32, p.y as f32, 0.0]);
+    };
+
+    let add_triangle = |indices: &mut Vec<u32>, a: u32, b: u32, c: u32| {
+        indices.extend_from_slice(&[a, b, c]);
+    };
+
+    let count = if closed {
+        points.len().saturating_sub(1)
+    } else {
+        points.len()
+    };
+    if count < 2 {
+        return (Vec::new(), Vec::new());
+    }
+
+    let upper = if closed { count + 1 } else { count };
+
+    for i in 0..upper {
+        let prev = points[(i + count - 1) % count];
+        let curr = points[i % count];
+        let next = points[(i + 1) % count];
+
+        let mut dir1 = (curr - prev).normalize();
+        let mut dir2 = (next - curr).normalize();
+
+        if !closed && i == 0 {
+            dir1 = dir2;
+        }
+        if !closed && i == count - 1 {
+            dir2 = dir1;
+        }
+
+        let normal = Vector2d::new(-dir1.y, dir1.x);
+
+        let miter_dir = (dir1 + dir2).normalize();
+        let miter_dir = Vector2d::new(-miter_dir.y, miter_dir.x);
+
+        // 防止极端尖角导致过大 miter
+        let denom = normal.dot(&miter_dir).abs().max(1e-6);
+        let miter_length = 0.5 * width / denom;
+
+        let base = (positions.len() / 3) as u32;
+        add_point(&mut positions, curr + miter_dir * miter_length);
+        add_point(&mut positions, curr - miter_dir * miter_length);
+        if i > 0 {
+            add_triangle(&mut indices, base - 2, base, base - 1);
+            add_triangle(&mut indices, base - 1, base, base + 1);
+        }
+    }
+
+    (positions, indices)
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct DrawUniform {
@@ -102,6 +199,17 @@ struct WgpuState {
     last_mouse_pos: Option<(u32, u32)>,
     current_cursor_pos: Option<PhysicalPosition<f64>>,
     zoom_speed: f64,
+
+    // Hover overlay (fill + stroke)
+    theme: Theme,
+    rtree: RTree<RTreeItem>,
+    hovered_shape: Option<bevy_ecs::entity::Entity>,
+    hover_spine: Vec<crate::graphics::vectors::Point2d>,
+    hover_fill_mesh: bevy_ecs::entity::Entity,
+    hover_fill_geometry: bevy_ecs::entity::Entity,
+    hover_stroke_mesh: bevy_ecs::entity::Entity,
+    hover_stroke_geometry: bevy_ecs::entity::Entity,
+    hover_stroke_width: f64,
 }
 
 impl WgpuState {
@@ -203,6 +311,36 @@ impl WgpuState {
             let aspect = size.width.max(1) as f64 / size.height.max(1) as f64;
             camera.height = camera.width / aspect;
         }
+
+        // Build R-tree once (for hover picking)
+        let mut rtree_items: Vec<RTreeItem> = Vec::new();
+        for (entity, shape_instance) in world
+            .query::<(bevy_ecs::entity::Entity, &ShapeInstance)>()
+            .iter(world)
+        {
+            rtree_items.push(RTreeItem {
+                shape_instance: entity,
+                aabb: shape_instance.world_polygon.envelope(),
+            });
+        }
+        let rtree = RTree::bulk_load(rtree_items);
+
+        // Create hover overlay meshes (rendered on top)
+        let hover_fill_geometry = world.spawn(Geometry::new()).id();
+        let hover_stroke_geometry = world.spawn(Geometry::new()).id();
+        let hover_material = world.spawn(Material::default()).id();
+
+        let mut fill_mesh = Mesh::new(hover_fill_geometry, hover_material);
+        fill_mesh.visible = false;
+        fill_mesh.render_order = 9_999;
+        let hover_fill_mesh = world.spawn(fill_mesh).id();
+
+        let mut stroke_mesh = Mesh::new(hover_stroke_geometry, hover_material);
+        stroke_mesh.visible = false;
+        stroke_mesh.render_order = 10_000;
+        let hover_stroke_mesh = world.spawn(stroke_mesh).id();
+
+        let hover_stroke_width = 5.0 * camera.width / (size.width.max(1) as f64);
 
         let shader_source = r#"
 struct Uniforms {
@@ -340,7 +478,157 @@ fn fs_main() -> @location(0) vec4<f32> {
             last_mouse_pos: None,
             current_cursor_pos: None,
             zoom_speed: 0.05,
+
+            theme,
+            rtree,
+            hovered_shape: None,
+            hover_spine: Vec::new(),
+            hover_fill_mesh,
+            hover_fill_geometry,
+            hover_stroke_mesh,
+            hover_stroke_geometry,
+            hover_stroke_width,
         })
+    }
+
+    fn set_hover_visible(&mut self, world: &mut World, visible: bool) {
+        if let Some(mut mesh) = world.get_mut::<Mesh>(self.hover_fill_mesh) {
+            mesh.visible = visible;
+        }
+        if let Some(mut mesh) = world.get_mut::<Mesh>(self.hover_stroke_mesh) {
+            mesh.visible = visible;
+        }
+    }
+
+    fn refresh_hover_stroke_width_if_needed(&mut self, world: &mut World) {
+        if self.hover_spine.is_empty() {
+            return;
+        }
+
+        let desired = 5.0 * self.camera.width / (self.config.width.max(1) as f64);
+        if (desired - self.hover_stroke_width).abs() < 1e-6 {
+            return;
+        }
+        self.hover_stroke_width = desired;
+
+        let (positions, indices) =
+            build_ribbon_geometry(&self.hover_spine, self.hover_stroke_width, true);
+        if let Some(mut geo) = world.get_mut::<Geometry>(self.hover_stroke_geometry) {
+            geo.positions = positions;
+            geo.indices = indices;
+        }
+    }
+
+    fn pick_shape_at_world(&self, world: &World, x: f64, y: f64) -> Option<bevy_ecs::entity::Entity> {
+        let point = geo::Point::new(x, y);
+        let items = self.rtree.locate_all_at_point(&point);
+
+        let mut result: Option<bevy_ecs::entity::Entity> = None;
+        let mut result_layer_index = -i16::MAX;
+
+        for item in items {
+            let Some(shape_instance) = world.get::<ShapeInstance>(item.shape_instance) else {
+                continue;
+            };
+
+            if shape_instance.layer_index < result_layer_index {
+                continue;
+            }
+
+            let Some(layer) = world.get::<Layer>(shape_instance.layer) else {
+                continue;
+            };
+            if !layer.visible {
+                continue;
+            }
+
+            if !shape_instance.world_polygon.contains(&point) {
+                continue;
+            }
+
+            result = Some(item.shape_instance);
+            result_layer_index = shape_instance.layer_index;
+        }
+
+        result
+    }
+
+    fn update_hover_at_screen(&mut self, world: &mut World, x: u32, y: u32) {
+        let (wx, wy) = self.screen_to_world(x, y);
+        let hit = self.pick_shape_at_world(world, wx, wy);
+
+        if hit == self.hovered_shape {
+            return;
+        }
+
+        self.hovered_shape = hit;
+
+        let Some(hit) = hit else {
+            self.hover_spine.clear();
+            self.set_hover_visible(world, false);
+            return;
+        };
+
+        let Some(shape_instance) = world.get::<ShapeInstance>(hit) else {
+            self.hover_spine.clear();
+            self.set_hover_visible(world, false);
+            return;
+        };
+
+        // 先在不可变借用阶段把数据算出来，避免后续 get_mut 的借用冲突。
+        let (fill_positions, fill_indices, spine) = {
+            let (fill_positions, fill_indices) = build_fill_geometry(&shape_instance.world_polygon);
+            let mut spine: Vec<crate::graphics::vectors::Point2d> = Vec::new();
+            for coord in shape_instance.world_polygon.exterior().points() {
+                spine.push(crate::graphics::vectors::Point2d::new(coord.x(), coord.y()));
+            }
+            (fill_positions, fill_indices, spine)
+        };
+
+        // Fill geometry
+        if let Some(mut geo) = world.get_mut::<Geometry>(self.hover_fill_geometry) {
+            geo.positions = fill_positions;
+            geo.indices = fill_indices;
+        }
+
+        // Stroke geometry
+        self.hover_spine = spine;
+        let (stroke_positions, stroke_indices) =
+            build_ribbon_geometry(&self.hover_spine, self.hover_stroke_width, true);
+        if let Some(mut geo) = world.get_mut::<Geometry>(self.hover_stroke_geometry) {
+            geo.positions = stroke_positions;
+            geo.indices = stroke_indices;
+        }
+
+        // Colors
+        let (fill_rgb, fill_a) = match self.theme {
+            Theme::Light => ([0.0, 0.0, 0.0], 0.12),
+            Theme::Dark => ([1.0, 1.0, 1.0], 0.12),
+        };
+        let stroke_color = match self.theme {
+            Theme::Light => [0.0, 0.4, 0.6, 0.9],
+            Theme::Dark => [0.0, 0.6, 1.0, 0.9],
+        };
+
+        if let Some(mut mesh) = world.get_mut::<Mesh>(self.hover_fill_mesh) {
+            mesh.set_vec4(
+                "color",
+                nalgebra::Vector4::new(fill_rgb[0], fill_rgb[1], fill_rgb[2], fill_a),
+            );
+            mesh.visible = true;
+        }
+        if let Some(mut mesh) = world.get_mut::<Mesh>(self.hover_stroke_mesh) {
+            mesh.set_vec4(
+                "color",
+                nalgebra::Vector4::new(
+                    stroke_color[0],
+                    stroke_color[1],
+                    stroke_color[2],
+                    stroke_color[3],
+                ),
+            );
+            mesh.visible = true;
+        }
     }
 
     fn screen_to_world(&self, screen_x: u32, screen_y: u32) -> (f64, f64) {
@@ -427,6 +715,8 @@ fn fs_main() -> @location(0) vec4<f32> {
     }
 
     fn render(&mut self, world: &mut World) -> Result<()> {
+        // 缩放/resize 后，hover 线宽需要跟随更新
+        self.refresh_hover_stroke_width_if_needed(world);
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(wgpu::SurfaceError::Lost) => {
@@ -622,7 +912,10 @@ pub fn spawn_wgpu_window(world: World, theme: Theme) -> Result<()> {
                 WindowEvent::CursorMoved { position, .. } => {
                     state.current_cursor_pos = Some(position);
                     state.handle_mouse_move(position.x as u32, position.y as u32);
+                    state.update_hover_at_screen(&mut world, position.x as u32, position.y as u32);
                     if state.is_dragging {
+                        window.request_redraw();
+                    } else {
                         window.request_redraw();
                     }
                 }
@@ -652,8 +945,15 @@ pub fn spawn_wgpu_window(world: World, theme: Theme) -> Result<()> {
                             winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y,
                         };
                         state.handle_mouse_wheel(pos.x as u32, pos.y as u32, delta_y);
+                        state.update_hover_at_screen(&mut world, pos.x as u32, pos.y as u32);
                         window.request_redraw();
                     }
+                }
+                WindowEvent::CursorLeft { .. } => {
+                    state.hovered_shape = None;
+                    state.hover_spine.clear();
+                    state.set_hover_visible(&mut world, false);
+                    window.request_redraw();
                 }
                 WindowEvent::Resized(size) => {
                     // wgpu 要求宽高非 0；winit 最小化时会给 0
@@ -661,6 +961,13 @@ pub fn spawn_wgpu_window(world: World, theme: Theme) -> Result<()> {
                     let height = NonZeroU32::new(size.height);
                     if width.is_some() && height.is_some() {
                         state.resize(size);
+                        if let Some(pos) = state.current_cursor_pos {
+                            state.update_hover_at_screen(
+                                &mut world,
+                                pos.x as u32,
+                                pos.y as u32,
+                            );
+                        }
                         window.request_redraw();
                     }
                 }

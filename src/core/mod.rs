@@ -7,5 +7,5 @@ pub mod root_finder;
 
 mod hover_effect;
 mod path_outline;
-mod rtree;
+pub mod rtree;
 mod triangulation;
